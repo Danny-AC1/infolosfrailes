@@ -1,0 +1,8 @@
+{
+  "name": "Guía Playa Los Frailes",
+  "description": "Guía interactiva offline para el Parque Nacional Machalilla - Playa Los Frailes.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
