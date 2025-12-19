@@ -1,5 +1,5 @@
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, Image as ImageIcon } from 'lucide-react';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
@@ -15,10 +15,25 @@ interface EditableImageProps {
 export default function EditableImage({ src, isAdmin, onSave, className, alt }: EditableImageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+
+  // Clear local preview when the source changes (upload finished and prop updated)
+  useEffect(() => {
+    if (src && localPreview) {
+      setLocalPreview(null);
+    }
+  }, [src]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !isAdmin) return;
+
+    // Show immediate local preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLocalPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
 
     setIsUploading(true);
     try {
@@ -29,15 +44,18 @@ export default function EditableImage({ src, isAdmin, onSave, className, alt }: 
     } catch (err) {
       console.error("Upload failed:", err);
       alert("Error subiendo imagen.");
+      setLocalPreview(null); // Clear preview on error
     } finally {
       setIsUploading(false);
     }
   };
 
+  const displaySrc = localPreview || src;
+
   return (
     <div className={`relative group/img bg-slate-100 flex items-center justify-center overflow-hidden ${className}`}>
-      {src ? (
-        <img src={src} alt={alt || "Image"} className="w-full h-full object-cover" />
+      {displaySrc ? (
+        <img src={displaySrc} alt={alt || "Image"} className={`w-full h-full object-cover transition-opacity duration-300 ${isUploading ? 'opacity-50' : 'opacity-100'}`} />
       ) : (
         <div className="flex flex-col items-center justify-center text-slate-300 gap-2 p-4">
           <ImageIcon size={48} strokeWidth={1.5} />
@@ -73,8 +91,10 @@ export default function EditableImage({ src, isAdmin, onSave, className, alt }: 
       )}
 
       {isUploading && (
-        <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-10">
-          <RefreshCw className="animate-spin text-[#118AB2]" size={32} />
+        <div className="absolute inset-0 bg-white/20 backdrop-blur-[2px] flex items-center justify-center z-10">
+          <div className="bg-white/90 p-4 rounded-full shadow-lg">
+            <RefreshCw className="animate-spin text-[#118AB2]" size={32} />
+          </div>
         </div>
       )}
     </div>

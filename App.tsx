@@ -4,12 +4,13 @@ import {
   Info, Map as MapIcon, Globe, MessageSquare, ShieldCheck, 
   Ban, CheckCircle2, Car, Camera, Waves, Footprints, 
   Trash2, Utensils, Edit3, Save, X, Eye, EyeOff, Send, Tag, Plus, Trash, Sparkles, ShoppingBag,
-  Hotel, MapPin, ExternalLink, Loader2, User, Calendar
+  Hotel, MapPin, ExternalLink, Loader2, User, Calendar, Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from './firebase';
 import { SiteContent, Activity, Ally, Feedback } from './types';
 import { GoogleGenAI } from "@google/genai";
 
@@ -87,17 +88,17 @@ const AllyCard: React.FC<AllyCardProps> = ({
       <button 
         onClick={() => getDirections(ally)}
         disabled={loadingMap === ally.id}
-        className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-transform hover:bg-[#118AB2]"
+        className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-transform hover:bg-[#118AB2] disabled:bg-slate-300"
       >
         {loadingMap === ally.id ? <Loader2 className="animate-spin" size={18}/> : <MapPin size={18}/>}
         {loadingMap === ally.id ? 'LOCALIZANDO...' : '¿CÓMO LLEGAR?'}
       </button>
 
-      {mapResult && loadingMap === null && (
+      {mapResult && !loadingMap && (
         <div className="mt-6 p-6 bg-[#F2E8CF]/50 rounded-3xl border border-[#F2E8CF] animate-in zoom-in-95 duration-300">
           <p className="text-xs font-bold text-slate-700 leading-relaxed mb-4">{mapResult.text}</p>
           {mapResult.links.map((link: any, i: number) => (
-            <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group">
+            <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group mb-2 last:mb-0">
               <span className="text-[10px] font-black uppercase text-[#118AB2]">{link.title || 'Ver en Google Maps'}</span>
               <ExternalLink size={14} className="text-[#118AB2] group-hover:translate-x-1 transition-transform" />
             </a>
@@ -122,8 +123,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'info' | 'explora' | 'travel' | 'feedback' | 'aliados'>('info');
   const [isImproving, setIsImproving] = useState(false);
   const [loadingMap, setLoadingMap] = useState<string | null>(null);
-  const [mapResult, setMapResult] = useState<{ text: string, links: any[] } | null>(null);
+  const [mapResults, setMapResults] = useState<Record<string, { text: string, links: any[] }>>({});
+  const [isHeroUploading, setIsHeroUploading] = useState(false);
 
+  const heroFileInputRef = useRef<HTMLInputElement>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -158,16 +161,12 @@ export default function App() {
   }, []);
 
   const handleEasterEggClick = () => {
-    if (isAdmin) return; // Si ya es admin, no hacer nada
+    if (isAdmin) return;
     
     setClickCount(prev => {
       const newCount = prev + 1;
-      
       if (clickTimer.current) clearTimeout(clickTimer.current);
-      
-      clickTimer.current = setTimeout(() => {
-        setClickCount(0);
-      }, 2000); // Tienes 2 segundos entre pulsaciones
+      clickTimer.current = setTimeout(() => setClickCount(0), 2000);
 
       if (newCount >= 5) {
         setShowAdminLogin(true);
@@ -199,10 +198,28 @@ export default function App() {
       });
       setNewFeedback({ name: '', comment: '' });
       setFeedbackStatus('success');
-      setTimeout(() => setFeedbackStatus('idle'), 3000);
+      setTimeout(() => setFeedbackStatus('idle'), 2000);
     } catch (err) {
       console.error(err);
       setFeedbackStatus('idle');
+    }
+  };
+
+  const handleHeroFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !isAdmin) return;
+
+    setIsHeroUploading(true);
+    try {
+      const storageRef = ref(storage, `hero/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      await updateContent({ heroImage: url });
+    } catch (err) {
+      console.error("Hero upload failed:", err);
+      alert("Error subiendo portada.");
+    } finally {
+      setIsHeroUploading(false);
     }
   };
 
@@ -217,9 +234,9 @@ export default function App() {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Mejora este texto: "${text}"`,
+        contents: `Mejora este texto para atraer turistas a Playa Los Frailes: "${text}"`,
         config: {
-          systemInstruction: `Eres un experto en turismo para Playa Los Frailes. Contexto: ${context}. Responde solo con el texto mejorado.`,
+          systemInstruction: `Eres un experto en turismo para Playa Los Frailes. Contexto: ${context}. Responde solo con el texto mejorado y persuasivo.`,
         },
       });
       const improvedText = response.text?.trim();
@@ -233,7 +250,6 @@ export default function App() {
 
   const getDirections = async (ally: Ally) => {
     setLoadingMap(ally.id);
-    setMapResult(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       let lat = -1.4883; 
@@ -252,7 +268,7 @@ export default function App() {
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `¿Cómo llego a ${ally.name} ubicado en Puerto López/Machalilla, Manabí? Dame una descripción breve y el enlace directo de Google Maps.`,
+        contents: `¿Cómo llego a ${ally.name} ubicado en ${ally.address || 'Puerto López, Manabí'}? Menciona lugares de referencia cercanos si es posible y proporciona el enlace de Google Maps.`,
         config: {
           tools: [{ googleMaps: {} }],
           toolConfig: {
@@ -266,10 +282,13 @@ export default function App() {
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const mapsLinks = groundingChunks.filter((chunk: any) => chunk.maps).map((chunk: any) => chunk.maps);
 
-      setMapResult({
-        text: response.text || "Buscando ubicación...",
-        links: mapsLinks
-      });
+      setMapResults(prev => ({
+        ...prev,
+        [ally.id]: {
+          text: response.text || "Ubicación encontrada en el mapa.",
+          links: mapsLinks
+        }
+      }));
     } catch (err) {
       console.error(err);
       alert("Error al obtener direcciones.");
@@ -283,12 +302,25 @@ export default function App() {
     await updateDoc(doc(db, 'content', 'main'), updates);
   };
 
+  const updateList = async (field: keyof SiteContent, index: number, newValue: string | null) => {
+    if (!isAdmin) return;
+    const list = [...(content[field] as string[])];
+    if (newValue === null) {
+      list.splice(index, 1);
+    } else if (index === -1) {
+      list.push('Nuevo elemento informativo');
+    } else {
+      list[index] = newValue;
+    }
+    await updateDoc(doc(db, 'content', 'main'), { [field]: list });
+  };
+
   const addAlly = async () => {
     if (!isAdmin) return;
     await addDoc(collection(db, 'allies'), {
       name: 'Nuevo Aliado',
       type: 'restaurante',
-      description: 'Descripción del establecimiento.',
+      description: 'Descripción del establecimiento local.',
       image: '',
       address: 'Puerto López, Manabí'
     });
@@ -307,8 +339,8 @@ export default function App() {
   const addActivity = async (type: 'activity' | 'service') => {
     if (!isAdmin) return;
     await addDoc(collection(db, 'activities'), {
-      title: 'Nuevo Item',
-      description: 'Descripción breve.',
+      title: 'Nueva Propuesta',
+      description: 'Cuéntanos qué se puede hacer aquí.',
       image: '',
       type,
       price: type === 'service' ? '$0.00' : ''
@@ -324,6 +356,46 @@ export default function App() {
     if (!isAdmin || !confirm("¿Eliminar actividad?")) return;
     await deleteDoc(doc(db, 'activities', id));
   };
+
+  const ListEditor = ({ items, field, title, icon: Icon, colorClass }: { items: string[], field: keyof SiteContent, title: string, icon: any, colorClass: string }) => (
+    <div className={`${colorClass} p-6 rounded-3xl border shadow-sm`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="flex items-center gap-2 font-black uppercase tracking-tight text-sm"><Icon size={18}/> {title}</h3>
+        {isAdmin && (
+          <button 
+            onClick={() => updateList(field, -1, 'Nuevo item')}
+            className="bg-white/50 hover:bg-white p-1 rounded-lg transition-colors shadow-sm"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+      </div>
+      <ul className="space-y-3">
+        {items.map((n, i) => (
+          <li key={i} className="flex items-start gap-2 group/item">
+            <div className="flex-1">
+              <EditableText 
+                isAdmin={isAdmin} 
+                text={n} 
+                onSave={(val) => updateList(field, i, val)} 
+                className="text-sm font-bold text-slate-800 leading-tight"
+                multiline={isAdmin}
+              />
+            </div>
+            {isAdmin && (
+              <button 
+                onClick={() => updateList(field, i, null)}
+                className="text-rose-400 opacity-0 group-hover/item:opacity-100 p-1 hover:text-rose-600 transition-all"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </li>
+        ))}
+        {items.length === 0 && !isAdmin && <p className="text-xs text-slate-400 italic">No hay información disponible.</p>}
+      </ul>
+    </div>
+  );
 
   const ActivityCard: React.FC<{ item: Activity }> = ({ item }) => (
     <div className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-slate-100 group relative">
@@ -374,41 +446,68 @@ export default function App() {
   return (
     <div className="flex flex-col min-h-screen bg-[#F2E8CF] pb-24 font-['Montserrat']">
       {isAdmin && (
-        <div className="bg-emerald-600 text-white text-center py-2 sticky top-0 z-[60] flex flex-wrap justify-center items-center gap-3 shadow-md px-4">
-          <div className="flex items-center gap-2">
+        <div className="bg-emerald-600 text-white py-2 sticky top-0 z-[60] flex flex-wrap justify-center items-center gap-2 shadow-md px-4 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 mr-2">
             <Edit3 size={16} />
-            <span className="text-[10px] font-bold uppercase tracking-widest">Admin Mode</span>
+            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Panel</span>
           </div>
-          <button onClick={() => updateContent({ aliadosVisible: !content.aliadosVisible })} className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${content.aliadosVisible ? 'bg-white/40' : 'bg-rose-500/40'}`}>
-            {content.aliadosVisible ? <Eye size={12} className="inline mr-1"/> : <EyeOff size={12} className="inline mr-1"/>} ALIADOS
+          
+          <button 
+            onClick={() => heroFileInputRef.current?.click()} 
+            disabled={isHeroUploading}
+            className="bg-white/20 hover:bg-white/40 px-3 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1.5 transition-all active:scale-95"
+          >
+            {isHeroUploading ? <RefreshCw className="animate-spin" size={12}/> : <ImageIcon size={12}/>}
+            {isHeroUploading ? 'SUBIENDO...' : 'PORTADA'}
           </button>
-          <button onClick={() => updateContent({ tiendaVisible: !content.tiendaVisible })} className={`px-2 py-1 rounded text-[10px] font-bold transition-colors ${content.tiendaVisible ? 'bg-white/40' : 'bg-rose-500/40'}`}>
-            {content.tiendaVisible ? <ShoppingBag size={12} className="inline mr-1"/> : <EyeOff size={12} className="inline mr-1"/>} TIENDA
+
+          <button onClick={() => updateContent({ aliadosVisible: !content.aliadosVisible })} className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-colors flex items-center gap-1.5 ${content.aliadosVisible ? 'bg-white/20' : 'bg-rose-500/40'}`}>
+            {content.aliadosVisible ? <Eye size={12}/> : <EyeOff size={12}/>} ALIADOS
           </button>
-          <button onClick={() => setIsAdmin(false)} className="bg-white/30 px-3 py-1 rounded text-[10px] font-black">CERRAR</button>
+
+          <button onClick={() => updateContent({ tiendaVisible: !content.tiendaVisible })} className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-colors flex items-center gap-1.5 ${content.tiendaVisible ? 'bg-white/20' : 'bg-rose-500/40'}`}>
+            <ShoppingBag size={12}/> {content.tiendaVisible ? 'TIENDA' : 'OCULTO'}
+          </button>
+
+          <div className="h-4 w-px bg-white/20 mx-1"></div>
+
+          <button onClick={() => setIsAdmin(false)} className="bg-white/30 px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-white/50 transition-colors">SALIR</button>
+          
+          <input
+            type="file"
+            ref={heroFileInputRef}
+            onChange={handleHeroFileChange}
+            className="hidden"
+            accept="image/*"
+          />
         </div>
       )}
 
-      <header className="relative h-[40vh] md:h-[50vh] w-full">
-        <EditableImage isAdmin={isAdmin} src={content.heroImage} onSave={(url) => updateContent({ heroImage: url })} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
-          <div onClick={handleEasterEggClick} className="cursor-default select-none active:opacity-90">
-            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => updateContent({ heroTitle: val })} className="text-4xl font-black text-white mb-2" />
+      <header className="relative h-[45vh] md:h-[55vh] w-full shadow-2xl overflow-hidden">
+        <EditableImage 
+          isAdmin={isAdmin} 
+          src={content.heroImage} 
+          onSave={(url) => updateContent({ heroImage: url })} 
+          className="w-full h-full" 
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-8 sm:p-12">
+          <div onClick={handleEasterEggClick} className="cursor-default select-none active:opacity-90 max-w-xl">
+            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => updateContent({ heroTitle: val })} className="text-4xl sm:text-5xl font-black text-white mb-3 drop-shadow-lg" />
           </div>
-          <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => updateContent({ heroSubtitle: val })} className="text-lg text-white/80 font-medium" />
+          <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => updateContent({ heroSubtitle: val })} className="text-lg sm:text-xl text-white/90 font-medium leading-relaxed drop-shadow-md" />
         </div>
       </header>
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 mt-8">
-        <nav className="flex items-stretch bg-white rounded-[2rem] shadow-xl p-1.5 mb-8 border border-white overflow-x-auto no-scrollbar">
+        <nav className="flex items-stretch bg-white rounded-[2rem] shadow-xl p-1.5 mb-8 border border-white overflow-x-auto no-scrollbar sticky top-16 z-50">
           {[
             { id: 'info', icon: Info, label: 'Info' },
             { id: 'explora', icon: MapIcon, label: 'Explora' },
             { id: 'travel', icon: Globe, label: 'Travel' },
-            { id: 'aliados', icon: Utensils, label: '', hidden: !content.aliadosVisible && !isAdmin },
+            { id: 'aliados', icon: Utensils, label: 'Locales', hidden: !content.aliadosVisible && !isAdmin },
             { id: 'feedback', icon: MessageSquare, label: 'Opinión' }
           ].filter(t => !t.hidden).map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 min-w-[64px] flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-lg' : 'text-slate-400'}`}>
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 min-w-[64px] flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
               <tab.icon size={20} />
               {tab.label && <span className="text-[9px] mt-1 font-black uppercase tracking-wider">{tab.label}</span>}
             </button>
@@ -421,28 +520,16 @@ export default function App() {
               tabs={[
                 { id: 'normativas', label: 'Normativas', content: (
                   <div className="space-y-4">
-                    <div className="bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
-                      <h3 className="flex items-center gap-2 text-emerald-700 font-black mb-4"><CheckCircle2 size={20}/> PERMITIDO</h3>
-                      <ul className="space-y-2">
-                        {content.normativasPermitido.map((n, i) => <li key={i} className="text-sm font-bold text-emerald-900">• {n}</li>)}
-                      </ul>
-                    </div>
-                    <div className="bg-rose-50 p-6 rounded-3xl border border-rose-100">
-                      <h3 className="flex items-center gap-2 text-rose-700 font-black mb-4"><Ban size={20}/> PROHIBIDO</h3>
-                      <ul className="space-y-2">
-                        {content.normativasNoPermitido.map((n, i) => <li key={i} className="text-sm font-bold text-rose-900">• {n}</li>)}
-                      </ul>
-                    </div>
+                    <ListEditor items={content.normativasPermitido} field="normativasPermitido" title="PERMITIDO" icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-100 text-emerald-700" />
+                    <ListEditor items={content.normativasNoPermitido} field="normativasNoPermitido" title="PROHIBIDO" icon={Ban} colorClass="bg-rose-50 border-rose-100 text-rose-700" />
                   </div>
                 )},
-                { id: 'parqueadero', label: 'Parqueadero', content: <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                   <h3 className="font-black mb-4 flex items-center gap-2"><Car className="text-amber-500" /> INFORMACIÓN</h3>
-                   {content.parqueaderoItems.map((item, i) => <p key={i} className="text-sm font-medium text-slate-600 mb-2">• {item}</p>)}
-                </div> },
-                { id: 'seguridad', label: 'Seguridad', content: <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                   <h3 className="font-black mb-4 flex items-center gap-2"><ShieldCheck className="text-blue-500" /> PROTOCOLOS</h3>
-                   {content.seguridadItems.map((item, i) => <p key={i} className="text-sm font-medium text-slate-600 mb-2">• {item}</p>)}
-                </div> }
+                { id: 'parqueadero', label: 'Parqueadero', content: (
+                  <ListEditor items={content.parqueaderoItems} field="parqueaderoItems" title="INFORMACIÓN DE ACCESO" icon={Car} colorClass="bg-white border-slate-100 text-amber-500" />
+                )},
+                { id: 'seguridad', label: 'Seguridad', content: (
+                  <ListEditor items={content.seguridadItems} field="seguridadItems" title="PROTOCOLOS DE SALUD" icon={ShieldCheck} colorClass="bg-white border-slate-100 text-blue-500" />
+                )}
               ]}
             />
           </div>
@@ -453,14 +540,14 @@ export default function App() {
              <section>
                <div className="flex justify-between items-center mb-6">
                  <h2 className="text-2xl font-black text-slate-800">Actividades</h2>
-                 {isAdmin && <button onClick={() => addActivity('activity')} className="bg-emerald-500 text-white p-2 rounded-xl"><Plus size={20} /></button>}
+                 {isAdmin && <button onClick={() => addActivity('activity')} className="bg-emerald-500 text-white p-2 rounded-xl shadow-md active:scale-95"><Plus size={20} /></button>}
                </div>
                <div className="grid grid-cols-1 gap-6">{activities.filter(a => a.type === 'activity').map(activity => <ActivityCard key={activity.id} item={activity} />)}</div>
              </section>
              <section>
                <div className="flex justify-between items-center mb-6">
                  <h2 className="text-2xl font-black text-slate-800">Servicios</h2>
-                 {isAdmin && <button onClick={() => addActivity('service')} className="bg-[#118AB2] text-white p-2 rounded-xl"><Plus size={20} /></button>}
+                 {isAdmin && <button onClick={() => addActivity('service')} className="bg-[#118AB2] text-white p-2 rounded-xl shadow-md active:scale-95"><Plus size={20} /></button>}
                </div>
                <div className="grid grid-cols-1 gap-6">{activities.filter(a => a.type === 'service').map(service => <ActivityCard key={service.id} item={service} />)}</div>
              </section>
@@ -489,7 +576,7 @@ export default function App() {
                     deleteAlly={deleteAlly}
                     getDirections={getDirections}
                     loadingMap={loadingMap}
-                    mapResult={loadingMap === ally.id ? null : mapResult}
+                    mapResult={mapResults[ally.id] || null}
                   />
                 ))
               ) : (
@@ -509,7 +596,7 @@ export default function App() {
               <div className="p-8">
                 <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.title} onSave={(val) => updateContent({ ecuadorTravelPromo: { ...content.ecuadorTravelPromo, title: val } })} className="text-3xl font-black text-slate-800 mb-4" />
                 <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.description} onSave={(val) => updateContent({ ecuadorTravelPromo: { ...content.ecuadorTravelPromo, description: val } })} className="text-slate-500 text-lg mb-8 font-medium" multiline />
-                <a href={content.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-[#118AB2] text-white py-5 rounded-2xl font-black text-lg shadow-lg">VISITAR RED SOCIAL <Globe className="ml-2" size={20}/></a>
+                <a href={content.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-[#118AB2] text-white py-5 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-[0.98] transition-all">VISITAR RED SOCIAL <Globe className="ml-2" size={20}/></a>
               </div>
             </div>
             {(content.tiendaVisible || isAdmin) && (
@@ -518,7 +605,7 @@ export default function App() {
                 <div className="p-8">
                   <div className="flex items-center gap-3 mb-4"><ShoppingBag className="text-amber-400" size={24} /><EditableText isAdmin={isAdmin} text={content.tiendaPromo.title} onSave={(val) => updateContent({ tiendaPromo: { ...content.tiendaPromo, title: val } })} className="text-3xl font-black text-white" /></div>
                   <EditableText isAdmin={isAdmin} text={content.tiendaPromo.description} onSave={(val) => updateContent({ tiendaPromo: { ...content.tiendaPromo, description: val } })} className="text-slate-400 text-lg mb-8 font-medium" multiline />
-                  <a href={content.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-amber-400 text-slate-900 py-5 rounded-2xl font-black text-lg shadow-lg">IR A LA TIENDA</a>
+                  <a href={content.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-amber-400 text-slate-900 py-5 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-[0.98] transition-all">IR A LA TIENDA</a>
                 </div>
               </div>
             )}
@@ -558,10 +645,14 @@ export default function App() {
                 <button 
                   type="submit" 
                   disabled={feedbackStatus === 'sending'}
-                  className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all ${feedbackStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white hover:bg-[#118AB2] active:scale-95 shadow-lg'}`}
+                  className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all ${
+                    feedbackStatus === 'success' ? 'bg-emerald-500 text-white scale-[0.98]' : 
+                    feedbackStatus === 'sending' ? 'bg-slate-400 text-white cursor-not-allowed' :
+                    'bg-slate-900 text-white hover:bg-[#118AB2] active:scale-95 shadow-lg'
+                  }`}
                 >
-                  {feedbackStatus === 'sending' ? <Loader2 className="animate-spin" /> : <Send size={20} />}
-                  {feedbackStatus === 'sending' ? 'ENVIANDO...' : feedbackStatus === 'success' ? '¡GRACIAS!' : 'ENVIAR OPINIÓN'}
+                  {feedbackStatus === 'sending' ? <Loader2 className="animate-spin" /> : feedbackStatus === 'success' ? <CheckCircle2 size={24} /> : <Send size={20} />}
+                  {feedbackStatus === 'sending' ? 'ENVIANDO...' : feedbackStatus === 'success' ? '¡ENVIADO!' : 'ENVIAR OPINIÓN'}
                 </button>
               </form>
 
@@ -569,7 +660,7 @@ export default function App() {
                 <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Experiencias Recientes</h3>
                 {feedbacks.length > 0 ? (
                   feedbacks.map((f) => (
-                    <div key={f.id} className="bg-slate-50 p-6 rounded-[2rem] relative group border border-slate-100/50">
+                    <div key={f.id} className="bg-slate-50 p-6 rounded-[2rem] relative group border border-slate-100/50 hover:border-[#118AB2]/30 transition-colors">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <div className="w-8 h-8 rounded-full bg-[#118AB2]/10 flex items-center justify-center text-[#118AB2]">
@@ -586,7 +677,7 @@ export default function App() {
                       {isAdmin && (
                         <button 
                           onClick={() => deleteFeedback(f.id)}
-                          className="absolute -top-2 -right-2 bg-rose-500 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="absolute -top-2 -right-2 bg-rose-500 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600"
                         >
                           <Trash size={14} />
                         </button>
@@ -607,13 +698,13 @@ export default function App() {
 
       {showAdminLogin && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-sm rounded-[2rem] p-8 shadow-2xl">
-            <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><ShieldCheck className="text-[#118AB2]" /> Acceso Admin</h2>
+          <div className="bg-white w-full max-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><ShieldCheck className="text-[#118AB2]" /> Acceso Maestro</h2>
             <form onSubmit={handleAdminLogin} className="space-y-6">
               <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-slate-50 border-2 border-[#118AB2]/20 focus:border-[#118AB2] rounded-2xl p-4 outline-none text-center text-2xl font-black tracking-widest" placeholder="****" autoFocus />
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-bold text-slate-400">Cerrar</button>
-                <button type="submit" className="flex-1 bg-[#118AB2] text-white py-4 rounded-xl font-black">ENTRAR</button>
+                <button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-bold text-slate-400 py-4 hover:text-slate-600 transition-colors">Cancelar</button>
+                <button type="submit" className="flex-1 bg-[#118AB2] text-white py-4 rounded-xl font-black hover:brightness-110 shadow-lg active:scale-95 transition-all">ENTRAR</button>
               </div>
             </form>
           </div>
