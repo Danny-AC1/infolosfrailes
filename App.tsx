@@ -2,15 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Info, Map as MapIcon, Globe, MessageSquare, ShieldCheck, 
-  Ban, CheckCircle2, Car, Camera, Waves, Footprints, 
-  Trash2, Utensils, Edit3, Save, X, Eye, EyeOff, Send, Tag, Plus, Trash, Sparkles, ShoppingBag,
-  Hotel, MapPin, ExternalLink, Loader2, User, Calendar, Image as ImageIcon, RefreshCw
+  Ban, CheckCircle2, Car, Waves, Trash2, Utensils, 
+  Eye, EyeOff, Send, Plus, Trash, ShoppingBag,
+  Hotel, MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { SiteContent, Activity, Ally, Feedback } from './types';
 import { GoogleGenAI } from "@google/genai";
 
@@ -23,91 +22,26 @@ const INITIAL_CONTENT: SiteContent = {
   id: 'main',
   heroTitle: 'Playa Los Frailes',
   heroSubtitle: 'El secreto mejor guardado del Parque Nacional Machalilla',
-  heroImage: '',
+  heroImage: 'https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?auto=format&fit=crop&q=80&w=2000',
   normativasPermitido: ['Ropa cómoda', 'Uso de protector solar biodegradable'],
   normativasNoPermitido: ['Mascotas', 'Alcohol', 'Fogatas'],
-  parqueaderoItems: ['Área vigilada de 08:00 a 16:00', 'Capacidad para 50 vehículos'],
-  seguridadItems: ['Respete las banderas de playa', 'No nade solo'],
+  parqueaderoItems: ['Horario: 08:00 - 16:00', 'Capacidad: 50 vehículos'],
+  seguridadItems: ['Atención a banderas', 'No nadar solo'],
   aliadosVisible: true,
   tiendaVisible: true,
   ecuadorTravelPromo: {
     title: 'Manabí Travel Social',
-    description: 'Únete a nuestra red social turística y comparte tus aventuras en el corazón de Manabí.',
-    image: '',
+    description: 'Nuestra red social dedicada a compartir la magia de Manabí.',
+    image: 'https://images.unsplash.com/photo-1582967788606-a171c1080cb0?auto=format&fit=crop&q=80&w=1000',
     link: 'https://socialmanabitravel.vercel.app/'
   },
   tiendaPromo: {
-    title: 'Arte del Mar',
-    description: 'Adquiere productos locales y artesanías únicas inspiradas en la belleza de nuestras costas.',
-    image: '',
+    title: 'Tienda Online Los Frailes',
+    description: 'Artesanías únicas de nuestra comunidad.',
+    image: 'https://images.unsplash.com/photo-1605647540924-852290f6b0d5?auto=format&fit=crop&q=80&w=1000',
     link: 'https://arte-del-mar.web.app/'
   }
 };
-
-interface AllyCardProps {
-  ally: Ally;
-  isAdmin: boolean;
-  updateAlly: (id: string, updates: Partial<Ally>) => void | Promise<void>;
-  deleteAlly: (id: string) => void | Promise<void>;
-  getDirections: (ally: Ally) => void | Promise<void>;
-  loadingMap: string | null;
-  mapResult: { text: string; links: any[] } | null;
-}
-
-const AllyCard: React.FC<AllyCardProps> = ({ 
-  ally, 
-  isAdmin, 
-  updateAlly, 
-  deleteAlly, 
-  getDirections, 
-  loadingMap, 
-  mapResult 
-}) => (
-  <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 group">
-    <div className="relative h-56">
-      <EditableImage isAdmin={isAdmin} src={ally.image} onSave={(url) => updateAlly(ally.id, { image: url })} className="w-full h-full object-cover" />
-      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-4 py-1.5 rounded-full font-black text-[10px] uppercase tracking-widest text-slate-800 shadow-sm flex items-center gap-2">
-        {ally.type === 'hospedaje' ? <Hotel size={12}/> : <Utensils size={12}/>} {ally.type}
-      </div>
-    </div>
-    <div className="p-8">
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex-1">
-          <EditableText isAdmin={isAdmin} text={ally.name} onSave={(val) => updateAlly(ally.id, { name: val })} className="text-2xl font-black text-slate-900" />
-          <div className="flex items-center gap-1 text-slate-400 mt-1">
-             <MapPin size={12}/>
-             <EditableText isAdmin={isAdmin} text={ally.address || 'Puerto López, Manabí'} onSave={(val) => updateAlly(ally.id, { address: val })} className="text-[10px] font-bold uppercase tracking-tight" />
-          </div>
-        </div>
-        {isAdmin && (
-          <button onClick={() => deleteAlly(ally.id)} className="text-rose-400 hover:text-rose-600 p-2"><Trash2 size={20} /></button>
-        )}
-      </div>
-      <EditableText isAdmin={isAdmin} text={ally.description} onSave={(val) => updateAlly(ally.id, { description: val })} className="text-slate-500 font-medium text-sm leading-relaxed mb-6" multiline />
-      
-      <button 
-        onClick={() => getDirections(ally)}
-        disabled={loadingMap === ally.id}
-        className="w-full py-4 rounded-2xl bg-slate-900 text-white font-black text-sm flex items-center justify-center gap-3 active:scale-95 transition-transform hover:bg-[#118AB2] disabled:bg-slate-300"
-      >
-        {loadingMap === ally.id ? <Loader2 className="animate-spin" size={18}/> : <MapPin size={18}/>}
-        {loadingMap === ally.id ? 'LOCALIZANDO...' : '¿CÓMO LLEGAR?'}
-      </button>
-
-      {mapResult && !loadingMap && (
-        <div className="mt-6 p-6 bg-[#F2E8CF]/50 rounded-3xl border border-[#F2E8CF] animate-in zoom-in-95 duration-300">
-          <p className="text-xs font-bold text-slate-700 leading-relaxed mb-4">{mapResult.text}</p>
-          {mapResult.links.map((link: any, i: number) => (
-            <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow group mb-2 last:mb-0">
-              <span className="text-[10px] font-black uppercase text-[#118AB2]">{link.title || 'Ver en Google Maps'}</span>
-              <ExternalLink size={14} className="text-[#118AB2] group-hover:translate-x-1 transition-transform" />
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
-  </div>
-);
 
 export default function App() {
   const [content, setContent] = useState<SiteContent>(INITIAL_CONTENT);
@@ -121,29 +55,27 @@ export default function App() {
   const [newFeedback, setNewFeedback] = useState({ name: '', comment: '' });
   const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'sending' | 'success'>('idle');
   const [activeTab, setActiveTab] = useState<'info' | 'explora' | 'travel' | 'feedback' | 'aliados'>('info');
-  const [isImproving, setIsImproving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadingMap, setLoadingMap] = useState<string | null>(null);
   const [mapResults, setMapResults] = useState<Record<string, { text: string, links: any[] }>>({});
-  const [isHeroUploading, setIsHeroUploading] = useState(false);
 
-  const heroFileInputRef = useRef<HTMLInputElement>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const unsubContent = onSnapshot(doc(db, 'content', 'main'), (snap) => {
       if (snap.exists()) {
-        const data = snap.data() as SiteContent;
-        setContent({ ...INITIAL_CONTENT, ...data });
+        setContent(prev => ({ ...prev, ...snap.data() as SiteContent }));
       } else {
         setDoc(doc(db, 'content', 'main'), INITIAL_CONTENT);
       }
-    });
+      setIsLoading(false);
+    }, () => setIsLoading(false));
 
-    const unsubActivities = onSnapshot(collection(db, 'activities'), (snap) => {
+    const unsubActivities = onSnapshot(query(collection(db, 'activities'), orderBy('timestamp', 'desc')), (snap) => {
       setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
     });
 
-    const unsubAllies = onSnapshot(collection(db, 'allies'), (snap) => {
+    const unsubAllies = onSnapshot(query(collection(db, 'allies'), orderBy('timestamp', 'desc')), (snap) => {
       setAllies(snap.docs.map(d => ({ id: d.id, ...d.data() } as Ally)));
     });
 
@@ -153,98 +85,34 @@ export default function App() {
     });
 
     return () => {
-      unsubContent();
-      unsubActivities();
-      unsubAllies();
-      unsubFeedbacks();
+      unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks();
     };
   }, []);
 
-  const handleEasterEggClick = () => {
-    if (isAdmin) return;
-    
-    setClickCount(prev => {
-      const newCount = prev + 1;
-      if (clickTimer.current) clearTimeout(clickTimer.current);
-      clickTimer.current = setTimeout(() => setClickCount(0), 2000);
-
-      if (newCount >= 5) {
-        setShowAdminLogin(true);
-        return 0;
-      }
-      return newCount;
-    });
-  };
-
-  const handleAdminLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (adminPassword === '1996') {
-      setIsAdmin(true);
-      setShowAdminLogin(false);
-      setAdminPassword('');
-    } else {
-      alert("Clave incorrecta");
+  const handleAdminAction = async (action: () => Promise<void>) => {
+    if (!isAdmin) return;
+    try {
+      await action();
+    } catch (error) {
+      console.error("Admin Error:", error);
+      alert("Error al procesar la acción de administrador.");
     }
   };
 
   const submitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFeedback.name || !newFeedback.comment) return;
+    if (!newFeedback.name.trim() || !newFeedback.comment.trim()) return;
     setFeedbackStatus('sending');
     try {
       await addDoc(collection(db, 'feedbacks'), {
         ...newFeedback,
         timestamp: serverTimestamp()
       });
-      setNewFeedback({ name: '', comment: '' });
       setFeedbackStatus('success');
-      setTimeout(() => setFeedbackStatus('idle'), 2000);
+      setNewFeedback({ name: '', comment: '' });
+      setTimeout(() => setFeedbackStatus('idle'), 3000);
     } catch (err) {
-      console.error(err);
       setFeedbackStatus('idle');
-    }
-  };
-
-  const handleHeroFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !isAdmin) return;
-
-    setIsHeroUploading(true);
-    try {
-      const storageRef = ref(storage, `hero/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
-      await updateContent({ heroImage: url });
-    } catch (err) {
-      console.error("Hero upload failed:", err);
-      alert("Error subiendo portada.");
-    } finally {
-      setIsHeroUploading(false);
-    }
-  };
-
-  const deleteFeedback = async (id: string) => {
-    if (!isAdmin || !confirm("¿Eliminar opinión?")) return;
-    await deleteDoc(doc(db, 'feedbacks', id));
-  };
-
-  const improveWithAI = async (text: string, context: string, onUpdate: (val: string) => void) => {
-    setIsImproving(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Mejora este texto para atraer turistas a Playa Los Frailes: "${text}"`,
-        config: {
-          systemInstruction: `Eres un experto en turismo para Playa Los Frailes. Contexto: ${context}. Responde solo con el texto mejorado y persuasivo.`,
-        },
-      });
-      const improvedText = response.text?.trim();
-      if (improvedText) onUpdate(improvedText);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsImproving(false);
     }
   };
 
@@ -252,283 +120,118 @@ export default function App() {
     setLoadingMap(ally.id);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      let lat = -1.4883; 
-      let lng = -80.7514;
-      
-      if (navigator.geolocation) {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, () => reject());
-        }).catch(() => null);
-        
-        if (pos) {
-          lat = pos.coords.latitude;
-          lng = pos.coords.longitude;
-        }
-      }
-
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `¿Cómo llego a ${ally.name} ubicado en ${ally.address || 'Puerto López, Manabí'}? Menciona lugares de referencia cercanos si es posible y proporciona el enlace de Google Maps.`,
-        config: {
-          tools: [{ googleMaps: {} }],
-          toolConfig: {
-            retrievalConfig: {
-              latLng: { latitude: lat, longitude: lng }
-            }
-          }
-        },
+        contents: `Guía para llegar a ${ally.name} en ${ally.address || 'Puerto López, Manabí'}.`,
+        config: { tools: [{ googleMaps: {} }] },
       });
-
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const mapsLinks = groundingChunks.filter((chunk: any) => chunk.maps).map((chunk: any) => chunk.maps);
-
-      setMapResults(prev => ({
-        ...prev,
-        [ally.id]: {
-          text: response.text || "Ubicación encontrada en el mapa.",
-          links: mapsLinks
-        }
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      const mapsLinks = chunks.filter((c: any) => c.maps).map((c: any) => c.maps);
+      setMapResults(prev => ({ 
+        ...prev, 
+        [ally.id]: { text: response.text || "Ubicación lista.", links: mapsLinks } 
       }));
     } catch (err) {
       console.error(err);
-      alert("Error al obtener direcciones.");
     } finally {
       setLoadingMap(null);
     }
   };
 
-  const updateContent = async (updates: Partial<SiteContent>) => {
-    if (!isAdmin) return;
-    await updateDoc(doc(db, 'content', 'main'), updates);
-  };
-
-  const updateList = async (field: keyof SiteContent, index: number, newValue: string | null) => {
-    if (!isAdmin) return;
-    const list = [...(content[field] as string[])];
-    if (newValue === null) {
-      list.splice(index, 1);
-    } else if (index === -1) {
-      list.push('Nuevo elemento informativo');
-    } else {
-      list[index] = newValue;
-    }
-    await updateDoc(doc(db, 'content', 'main'), { [field]: list });
-  };
-
-  const addAlly = async () => {
-    if (!isAdmin) return;
-    await addDoc(collection(db, 'allies'), {
-      name: 'Nuevo Aliado',
-      type: 'restaurante',
-      description: 'Descripción del establecimiento local.',
-      image: '',
-      address: 'Puerto López, Manabí'
-    });
-  };
-
-  const updateAlly = async (id: string, updates: Partial<Ally>) => {
-    if (!isAdmin) return;
-    await updateDoc(doc(db, 'allies', id), updates);
-  };
-
-  const deleteAlly = async (id: string) => {
-    if (!isAdmin || !confirm("¿Eliminar aliado?")) return;
-    await deleteDoc(doc(db, 'allies', id));
-  };
-
-  const addActivity = async (type: 'activity' | 'service') => {
-    if (!isAdmin) return;
-    await addDoc(collection(db, 'activities'), {
-      title: 'Nueva Propuesta',
-      description: 'Cuéntanos qué se puede hacer aquí.',
-      image: '',
-      type,
-      price: type === 'service' ? '$0.00' : ''
-    });
-  };
-
-  const updateActivity = async (id: string, updates: Partial<Activity>) => {
-    if (!isAdmin) return;
-    await updateDoc(doc(db, 'activities', id), updates);
-  };
-
-  const deleteActivity = async (id: string) => {
-    if (!isAdmin || !confirm("¿Eliminar actividad?")) return;
-    await deleteDoc(doc(db, 'activities', id));
-  };
-
-  const ListEditor = ({ items, field, title, icon: Icon, colorClass }: { items: string[], field: keyof SiteContent, title: string, icon: any, colorClass: string }) => (
-    <div className={`${colorClass} p-6 rounded-3xl border shadow-sm`}>
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="flex items-center gap-2 font-black uppercase tracking-tight text-sm"><Icon size={18}/> {title}</h3>
-        {isAdmin && (
-          <button 
-            onClick={() => updateList(field, -1, 'Nuevo item')}
-            className="bg-white/50 hover:bg-white p-1 rounded-lg transition-colors shadow-sm"
-          >
-            <Plus size={16} />
-          </button>
-        )}
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-[#F2E8CF] flex flex-col items-center justify-center z-[200]">
+        <RefreshCw className="animate-spin text-[#118AB2] mb-4" size={40} />
+        <p className="text-[#118AB2] font-black text-[10px] uppercase tracking-[0.3em]">Conectando...</p>
       </div>
-      <ul className="space-y-3">
-        {items.map((n, i) => (
-          <li key={i} className="flex items-start gap-2 group/item">
-            <div className="flex-1">
-              <EditableText 
-                isAdmin={isAdmin} 
-                text={n} 
-                onSave={(val) => updateList(field, i, val)} 
-                className="text-sm font-bold text-slate-800 leading-tight"
-                multiline={isAdmin}
-              />
-            </div>
-            {isAdmin && (
-              <button 
-                onClick={() => updateList(field, i, null)}
-                className="text-rose-400 opacity-0 group-hover/item:opacity-100 p-1 hover:text-rose-600 transition-all"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </li>
-        ))}
-        {items.length === 0 && !isAdmin && <p className="text-xs text-slate-400 italic">No hay información disponible.</p>}
-      </ul>
-    </div>
-  );
-
-  const ActivityCard: React.FC<{ item: Activity }> = ({ item }) => (
-    <div className="bg-white rounded-[2rem] overflow-hidden shadow-lg border border-slate-100 group relative">
-      <div className="relative h-48">
-        <EditableImage
-          isAdmin={isAdmin}
-          src={item.image}
-          onSave={(url) => updateActivity(item.id, { image: url })}
-          className="w-full h-full object-cover"
-        />
-        {item.price && !isAdmin && (
-          <div className="absolute top-4 right-4 bg-[#118AB2] text-white px-4 py-1.5 rounded-full font-black text-sm shadow-lg">
-            <Tag size={14} className="inline mr-1" /> {item.price}
-          </div>
-        )}
-      </div>
-      <div className="p-6">
-        <div className="flex justify-between items-start gap-2 mb-2">
-          <div className="flex-1">
-            <EditableText isAdmin={isAdmin} text={item.title} onSave={(val) => updateActivity(item.id, { title: val })} className="text-xl font-black text-slate-800" />
-          </div>
-          {isAdmin && (
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => improveWithAI(item.description, `Descripción de la actividad/servicio: ${item.title}`, (val) => updateActivity(item.id, { description: val }))}
-                className="text-indigo-400 hover:text-indigo-600 p-1"
-                disabled={isImproving}
-              >
-                <Sparkles size={18} className={isImproving ? 'animate-pulse' : ''} />
-              </button>
-              <button onClick={() => deleteActivity(item.id)} className="text-rose-400 hover:text-rose-600 p-1">
-                <Trash size={18} />
-              </button>
-            </div>
-          )}
-        </div>
-        <EditableText isAdmin={isAdmin} text={item.description} onSave={(val) => updateActivity(item.id, { description: val })} className="text-slate-500 font-medium text-sm leading-relaxed" multiline />
-        {isAdmin && (
-          <div className="mt-4 pt-4 border-t border-slate-50 flex items-center gap-2">
-            <Tag size={14} className="text-[#118AB2]" />
-            <EditableText isAdmin={isAdmin} text={item.price || 'Sin precio'} onSave={(val) => updateActivity(item.id, { price: val })} className="text-[#118AB2] font-black text-xs uppercase" />
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F2E8CF] pb-24 font-['Montserrat']">
+    <div className="flex flex-col min-h-screen bg-[#F2E8CF] pb-24 font-['Montserrat'] overflow-x-hidden">
       {isAdmin && (
-        <div className="bg-emerald-600 text-white py-2 sticky top-0 z-[60] flex flex-wrap justify-center items-center gap-2 shadow-md px-4 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2 mr-2">
-            <Edit3 size={16} />
-            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Panel</span>
+        <div className="bg-slate-900 text-white py-3 sticky top-0 z-[100] flex flex-wrap justify-center items-center gap-3 shadow-2xl px-4 border-b border-white/10 backdrop-blur-md">
+          <div className="flex items-center gap-2 mr-2 bg-white/10 px-3 py-1.5 rounded-full">
+            <ShieldCheck size={14} className="text-[#118AB2]" />
+            <span className="text-[9px] font-black uppercase tracking-widest">Editor</span>
           </div>
-          
           <button 
-            onClick={() => heroFileInputRef.current?.click()} 
-            disabled={isHeroUploading}
-            className="bg-white/20 hover:bg-white/40 px-3 py-1.5 rounded-xl text-[10px] font-black flex items-center gap-1.5 transition-all active:scale-95"
+            onClick={() => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { aliadosVisible: !content.aliadosVisible }); })} 
+            className={`px-4 py-2 rounded-xl text-[9px] font-black transition-all flex items-center gap-2 ${content.aliadosVisible ? 'bg-emerald-500' : 'bg-rose-500'}`}
           >
-            {isHeroUploading ? <RefreshCw className="animate-spin" size={12}/> : <ImageIcon size={12}/>}
-            {isHeroUploading ? 'SUBIENDO...' : 'PORTADA'}
+            {content.aliadosVisible ? <Eye size={12}/> : <EyeOff size={12}/>} LOCALES
           </button>
-
-          <button onClick={() => updateContent({ aliadosVisible: !content.aliadosVisible })} className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-colors flex items-center gap-1.5 ${content.aliadosVisible ? 'bg-white/20' : 'bg-rose-500/40'}`}>
-            {content.aliadosVisible ? <Eye size={12}/> : <EyeOff size={12}/>} ALIADOS
+          <button 
+            onClick={() => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { tiendaVisible: !content.tiendaVisible }); })} 
+            className={`px-4 py-2 rounded-xl text-[9px] font-black transition-all flex items-center gap-2 ${content.tiendaVisible ? 'bg-amber-500' : 'bg-slate-700'}`}
+          >
+            <ShoppingBag size={12}/> TIENDA
           </button>
-
-          <button onClick={() => updateContent({ tiendaVisible: !content.tiendaVisible })} className={`px-3 py-1.5 rounded-xl text-[10px] font-black transition-colors flex items-center gap-1.5 ${content.tiendaVisible ? 'bg-white/20' : 'bg-rose-500/40'}`}>
-            <ShoppingBag size={12}/> {content.tiendaVisible ? 'TIENDA' : 'OCULTO'}
-          </button>
-
-          <div className="h-4 w-px bg-white/20 mx-1"></div>
-
-          <button onClick={() => setIsAdmin(false)} className="bg-white/30 px-3 py-1.5 rounded-xl text-[10px] font-black hover:bg-white/50 transition-colors">SALIR</button>
-          
-          <input
-            type="file"
-            ref={heroFileInputRef}
-            onChange={handleHeroFileChange}
-            className="hidden"
-            accept="image/*"
-          />
+          <button onClick={() => setIsAdmin(false)} className="bg-white/10 text-white px-4 py-2 rounded-xl text-[9px] font-black border border-white/20">SALIR</button>
         </div>
       )}
 
-      <header className="relative h-[45vh] md:h-[55vh] w-full shadow-2xl overflow-hidden">
+      <header className="relative h-[48vh] md:h-[58vh] w-full shadow-2xl overflow-hidden group">
         <EditableImage 
           isAdmin={isAdmin} 
           src={content.heroImage} 
-          onSave={(url) => updateContent({ heroImage: url })} 
+          onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroImage: url }); })} 
           className="w-full h-full" 
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-8 sm:p-12">
-          <div onClick={handleEasterEggClick} className="cursor-default select-none active:opacity-90 max-w-xl">
-            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => updateContent({ heroTitle: val })} className="text-4xl sm:text-5xl font-black text-white mb-3 drop-shadow-lg" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8 sm:p-14 pointer-events-none">
+          <div 
+            onClick={() => {
+              if (isAdmin) return;
+              setClickCount(c => c + 1);
+              if (clickTimer.current) clearTimeout(clickTimer.current);
+              clickTimer.current = setTimeout(() => setClickCount(0), 1500);
+              if (clickCount + 1 >= 5) setShowAdminLogin(true);
+            }} 
+            className="max-w-2xl cursor-pointer active:scale-[0.99] transition-transform pointer-events-auto"
+          >
+            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroTitle: val }); })} className="text-4xl sm:text-6xl font-black text-white mb-2 drop-shadow-2xl" />
           </div>
-          <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => updateContent({ heroSubtitle: val })} className="text-lg sm:text-xl text-white/90 font-medium leading-relaxed drop-shadow-md" />
+          <div className="pointer-events-auto">
+            <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroSubtitle: val }); })} className="text-lg sm:text-2xl text-white/90 font-semibold leading-tight drop-shadow-md max-w-xl" />
+          </div>
         </div>
       </header>
 
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 mt-8">
-        <nav className="flex items-stretch bg-white rounded-[2rem] shadow-xl p-1.5 mb-8 border border-white overflow-x-auto no-scrollbar sticky top-16 z-50">
+        <nav className="flex items-stretch bg-white rounded-[2.5rem] shadow-2xl p-1.5 mb-10 border border-slate-100 overflow-x-auto no-scrollbar sticky top-6 z-[80] backdrop-blur-xl bg-white/80">
           {[
-            { id: 'info', icon: Info, label: 'Info' },
-            { id: 'explora', icon: MapIcon, label: 'Explora' },
-            { id: 'travel', icon: Globe, label: 'Travel' },
+            { id: 'info', icon: Info, label: 'Guía' },
+            { id: 'explora', icon: Waves, label: 'Explora' },
+            { id: 'travel', icon: Globe, label: 'Turismo' },
             { id: 'aliados', icon: Utensils, label: 'Locales', hidden: !content.aliadosVisible && !isAdmin },
-            { id: 'feedback', icon: MessageSquare, label: 'Opinión' }
+            { id: 'feedback', icon: MessageSquare, label: 'Opiniones' }
           ].filter(t => !t.hidden).map((tab) => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 min-w-[64px] flex flex-col items-center justify-center py-3 rounded-2xl transition-all ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}>
+            <button 
+              key={tab.id} 
+              onClick={() => setActiveTab(tab.id as any)} 
+              className={`flex-1 min-w-[70px] flex flex-col items-center justify-center py-4 rounded-[2rem] transition-all duration-300 ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-xl scale-100' : 'text-slate-400 hover:text-slate-600 scale-95 opacity-80'}`}
+            >
               <tab.icon size={20} />
-              {tab.label && <span className="text-[9px] mt-1 font-black uppercase tracking-wider">{tab.label}</span>}
+              <span className="text-[9px] mt-1.5 font-black uppercase tracking-widest">{tab.label}</span>
             </button>
           ))}
         </nav>
 
         {activeTab === 'info' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-             <TabView
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <TabView
               tabs={[
                 { id: 'normativas', label: 'Normativas', content: (
-                  <div className="space-y-4">
-                    <ListEditor items={content.normativasPermitido} field="normativasPermitido" title="PERMITIDO" icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-100 text-emerald-700" />
-                    <ListEditor items={content.normativasNoPermitido} field="normativasNoPermitido" title="PROHIBIDO" icon={Ban} colorClass="bg-rose-50 border-rose-100 text-rose-700" />
+                  <div className="space-y-6">
+                    <ListEditor items={content.normativasPermitido} field="normativasPermitido" title="Sí se permite" icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-200 text-emerald-800" isAdmin={isAdmin} content={content} />
+                    <ListEditor items={content.normativasNoPermitido} field="normativasNoPermitido" title="No se permite" icon={Ban} colorClass="bg-rose-50 border-rose-200 text-rose-800" isAdmin={isAdmin} content={content} />
                   </div>
                 )},
                 { id: 'parqueadero', label: 'Parqueadero', content: (
-                  <ListEditor items={content.parqueaderoItems} field="parqueaderoItems" title="INFORMACIÓN DE ACCESO" icon={Car} colorClass="bg-white border-slate-100 text-amber-500" />
+                  <ListEditor items={content.parqueaderoItems} field="parqueaderoItems" title="Info Vehicular" icon={Car} colorClass="bg-white border-slate-200 text-amber-700" isAdmin={isAdmin} content={content} />
                 )},
                 { id: 'seguridad', label: 'Seguridad', content: (
-                  <ListEditor items={content.seguridadItems} field="seguridadItems" title="PROTOCOLOS DE SALUD" icon={ShieldCheck} colorClass="bg-white border-slate-100 text-blue-500" />
+                  <ListEditor items={content.seguridadItems} field="seguridadItems" title="Zona Segura" icon={ShieldCheck} colorClass="bg-white border-slate-200 text-blue-700" isAdmin={isAdmin} content={content} />
                 )}
               ]}
             />
@@ -536,180 +239,276 @@ export default function App() {
         )}
 
         {activeTab === 'explora' && (
-          <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 py-4">
-             <section>
-               <div className="flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black text-slate-800">Actividades</h2>
-                 {isAdmin && <button onClick={() => addActivity('activity')} className="bg-emerald-500 text-white p-2 rounded-xl shadow-md active:scale-95"><Plus size={20} /></button>}
-               </div>
-               <div className="grid grid-cols-1 gap-6">{activities.filter(a => a.type === 'activity').map(activity => <ActivityCard key={activity.id} item={activity} />)}</div>
-             </section>
-             <section>
-               <div className="flex justify-between items-center mb-6">
-                 <h2 className="text-2xl font-black text-slate-800">Servicios</h2>
-                 {isAdmin && <button onClick={() => addActivity('service')} className="bg-[#118AB2] text-white p-2 rounded-xl shadow-md active:scale-95"><Plus size={20} /></button>}
-               </div>
-               <div className="grid grid-cols-1 gap-6">{activities.filter(a => a.type === 'service').map(service => <ActivityCard key={service.id} item={service} />)}</div>
-             </section>
-          </div>
-        )}
-
-        {activeTab === 'aliados' && (content.aliadosVisible || isAdmin) && (
-          <div className="animate-in fade-in slide-in-from-bottom-6 space-y-8 py-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-3xl font-black text-slate-900">Nuestros Aliados</h2>
-              {isAdmin && <button onClick={addAlly} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-lg active:scale-95"><Plus/></button>}
-            </div>
+          <div className="space-y-12 animate-in fade-in duration-500">
+            <section>
+              <div className="flex justify-between items-end mb-6 px-2">
+                <h2 className="text-3xl font-black text-slate-900 leading-none">Actividades</h2>
+                {isAdmin && (
+                  <button 
+                    onClick={() => handleAdminAction(async () => { 
+                      await addDoc(collection(db, 'activities'), { 
+                        title: 'Nueva Actividad', 
+                        description: 'Editar descripción...', 
+                        image: '', 
+                        type: 'activity', 
+                        timestamp: serverTimestamp() 
+                      }); 
+                    })} 
+                    className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl hover:scale-105 active:scale-90 transition-all"
+                  >
+                    <Plus size={20}/>
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-8">
+                {activities.filter(a => a.type === 'activity').map(activity => (
+                  <div key={activity.id} className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50">
+                    <div className="w-full sm:w-56 h-56 relative bg-slate-50">
+                      <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { image: url }); })} className="w-full h-full" />
+                    </div>
+                    <div className="p-8 flex-1 relative flex flex-col justify-center">
+                      {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm('¿Borrar?')) await deleteDoc(doc(db, 'activities', activity.id)); })} className="absolute top-6 right-6 text-rose-300 hover:text-rose-500"><Trash2 size={18}/></button>}
+                      <EditableText isAdmin={isAdmin} text={activity.title} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { title: val }); })} className="text-2xl font-black text-slate-800 mb-2" />
+                      <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
             
-            {!content.aliadosVisible && isAdmin && (
-              <div className="bg-rose-500 text-white p-4 rounded-2xl text-center font-black text-xs uppercase tracking-widest">Sección Oculta para el Público</div>
-            )}
-
-            <div className="grid grid-cols-1 gap-10">
-              {allies.length > 0 ? (
-                allies.map(ally => (
-                  <AllyCard 
-                    key={ally.id} 
-                    ally={ally} 
-                    isAdmin={isAdmin}
-                    updateAlly={updateAlly}
-                    deleteAlly={deleteAlly}
-                    getDirections={getDirections}
-                    loadingMap={loadingMap}
-                    mapResult={mapResults[ally.id] || null}
-                  />
-                ))
-              ) : (
-                <div className="text-center py-20 bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-                  <Utensils className="mx-auto text-slate-200 mb-4" size={48} />
-                  <p className="text-slate-400 font-bold">Próximamente más aliados locales...</p>
-                </div>
-              )}
-            </div>
+            <section>
+              <div className="flex justify-between items-end mb-6 px-2">
+                <h2 className="text-3xl font-black text-slate-900 leading-none">Servicios</h2>
+                {isAdmin && (
+                  <button 
+                    onClick={() => handleAdminAction(async () => { 
+                      await addDoc(collection(db, 'activities'), { 
+                        title: 'Nuevo Servicio', 
+                        description: 'Editar servicio...', 
+                        image: '', 
+                        type: 'service', 
+                        price: '$0.00', 
+                        timestamp: serverTimestamp() 
+                      }); 
+                    })} 
+                    className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl hover:scale-105 active:scale-90 transition-all"
+                  >
+                    <Plus size={20}/>
+                  </button>
+                )}
+              </div>
+              <div className="grid gap-6">
+                {activities.filter(a => a.type === 'service').map(service => (
+                  <div key={service.id} className="bg-white rounded-[2rem] overflow-hidden shadow-xl border border-slate-50 p-6 flex items-center gap-6">
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden flex-shrink-0 relative bg-slate-50">
+                      <EditableImage isAdmin={isAdmin} src={service.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', service.id), { image: url }); })} className="w-full h-full" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <EditableText isAdmin={isAdmin} text={service.title} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', service.id), { title: val }); })} className="text-lg font-black text-slate-800" />
+                        <div className="flex items-center gap-2">
+                           <EditableText isAdmin={isAdmin} text={service.price || ''} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', service.id), { price: val }); })} className="text-sm font-black text-[#118AB2]" />
+                           {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm('¿Borrar?')) await deleteDoc(doc(db, 'activities', service.id)); })} className="text-rose-300 hover:text-rose-500"><Trash2 size={14}/></button>}
+                        </div>
+                      </div>
+                      <EditableText isAdmin={isAdmin} text={service.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', service.id), { description: val }); })} className="text-xs text-slate-400 font-medium mt-1" multiline />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         )}
 
         {activeTab === 'travel' && (
-          <div className="animate-in space-y-12 py-4">
-            <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl border border-white">
-              <EditableImage isAdmin={isAdmin} src={content.ecuadorTravelPromo.image} onSave={(url) => updateContent({ ecuadorTravelPromo: { ...content.ecuadorTravelPromo, image: url } })} className="w-full h-64 object-cover" />
-              <div className="p-8">
-                <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.title} onSave={(val) => updateContent({ ecuadorTravelPromo: { ...content.ecuadorTravelPromo, title: val } })} className="text-3xl font-black text-slate-800 mb-4" />
-                <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.description} onSave={(val) => updateContent({ ecuadorTravelPromo: { ...content.ecuadorTravelPromo, description: val } })} className="text-slate-500 text-lg mb-8 font-medium" multiline />
-                <a href={content.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-[#118AB2] text-white py-5 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-[0.98] transition-all">VISITAR RED SOCIAL <Globe className="ml-2" size={20}/></a>
-              </div>
-            </div>
-            {(content.tiendaVisible || isAdmin) && (
-              <div className={`bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border-4 transition-all ${!content.tiendaVisible ? 'border-rose-500 opacity-60' : 'border-slate-800'}`}>
-                <EditableImage isAdmin={isAdmin} src={content.tiendaPromo.image} onSave={(url) => updateContent({ tiendaPromo: { ...content.tiendaPromo, image: url } })} className="w-full h-64 object-cover" />
-                <div className="p-8">
-                  <div className="flex items-center gap-3 mb-4"><ShoppingBag className="text-amber-400" size={24} /><EditableText isAdmin={isAdmin} text={content.tiendaPromo.title} onSave={(val) => updateContent({ tiendaPromo: { ...content.tiendaPromo, title: val } })} className="text-3xl font-black text-white" /></div>
-                  <EditableText isAdmin={isAdmin} text={content.tiendaPromo.description} onSave={(val) => updateContent({ tiendaPromo: { ...content.tiendaPromo, description: val } })} className="text-slate-400 text-lg mb-8 font-medium" multiline />
-                  <a href={content.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center w-full bg-amber-400 text-slate-900 py-5 rounded-2xl font-black text-lg shadow-lg hover:brightness-110 active:scale-[0.98] transition-all">IR A LA TIENDA</a>
-                </div>
-              </div>
-            )}
+          <div className="space-y-12 animate-in fade-in duration-600">
+             <div className="bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-slate-50">
+               <div className="h-72 relative bg-slate-50">
+                 <EditableImage isAdmin={isAdmin} src={content.ecuadorTravelPromo.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'ecuadorTravelPromo.image': url }); })} className="w-full h-full" />
+               </div>
+               <div className="p-10 text-center">
+                 <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.title} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'ecuadorTravelPromo.title': val }); })} className="text-3xl font-black text-slate-900 mb-4" />
+                 <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'ecuadorTravelPromo.description': val }); })} className="text-slate-500 font-medium mb-8 leading-relaxed text-sm" multiline />
+                 <a href={content.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xs tracking-widest uppercase shadow-xl hover:bg-[#118AB2] active:scale-95 transition-all">VISITAR RED SOCIAL</a>
+               </div>
+             </div>
+
+             {(content.tiendaVisible || isAdmin) && (
+               <div className={`bg-slate-900 rounded-[3.5rem] overflow-hidden shadow-2xl border-2 transition-all duration-700 ${!content.tiendaVisible ? 'opacity-30 grayscale border-rose-500/50' : 'border-slate-800'}`}>
+                 <div className="h-72 relative bg-slate-800">
+                   <EditableImage isAdmin={isAdmin} src={content.tiendaPromo.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'tiendaPromo.image': url }); })} className="w-full h-full" />
+                   {!content.tiendaVisible && (
+                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center pointer-events-none">
+                       <span className="bg-rose-500 text-white px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-2xl">Oculto</span>
+                     </div>
+                   )}
+                 </div>
+                 <div className="p-10 text-center">
+                   <EditableText isAdmin={isAdmin} text={content.tiendaPromo.title} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'tiendaPromo.title': val }); })} className="text-3xl font-black text-white mb-4" />
+                   <EditableText isAdmin={isAdmin} text={content.tiendaPromo.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { 'tiendaPromo.description': val }); })} className="text-slate-400 font-medium mb-8 leading-relaxed text-sm" multiline />
+                   <a href={content.tiendaPromo.link} target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-amber-400 text-slate-950 py-6 rounded-[2rem] font-black text-xs tracking-widest uppercase shadow-xl hover:brightness-110 active:scale-95 transition-all">IR A LA TIENDA</a>
+                 </div>
+               </div>
+             )}
+          </div>
+        )}
+
+        {activeTab === 'aliados' && (
+          <div className="space-y-10 animate-in fade-in duration-500">
+             <div className="flex justify-between items-end mb-8 px-2">
+               <h2 className="text-4xl font-black text-slate-900 leading-none">Aliados</h2>
+               {isAdmin && (
+                  <button 
+                    onClick={() => handleAdminAction(async () => { 
+                      await addDoc(collection(db, 'allies'), { 
+                        name: 'Nuevo Aliado', 
+                        type: 'restaurante', 
+                        description: 'Editar aliado...', 
+                        address: 'Puerto López', 
+                        image: '', 
+                        timestamp: serverTimestamp() 
+                      }); 
+                    })} 
+                    className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl hover:scale-105 active:scale-90 transition-all"
+                  >
+                    <Plus size={24}/>
+                  </button>
+               )}
+             </div>
+             <div className="grid gap-10">
+               {allies.map(ally => (
+                 <div key={ally.id} className="bg-white rounded-[3rem] overflow-hidden shadow-xl border border-slate-50">
+                    <div className="h-64 relative bg-slate-50 overflow-hidden">
+                      <EditableImage isAdmin={isAdmin} src={ally.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { image: url }); })} className="w-full h-full" />
+                    </div>
+                    <div className="p-10">
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="flex-1">
+                          <EditableText isAdmin={isAdmin} text={ally.name} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { name: val }); })} className="text-3xl font-black text-slate-900 mb-1 leading-none" />
+                          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mt-2">
+                            <MapPin size={12} className="text-[#118AB2]"/> <EditableText isAdmin={isAdmin} text={ally.address || 'Ubicación...'} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { address: val }); })} />
+                          </div>
+                        </div>
+                        {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm('¿Borrar?')) await deleteDoc(doc(db, 'allies', ally.id)); })} className="text-rose-300 hover:text-rose-500 p-2"><Trash size={20}/></button>}
+                      </div>
+                      <EditableText isAdmin={isAdmin} text={ally.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed mb-8" multiline />
+                      <button onClick={() => getDirections(ally)} disabled={!!loadingMap} className="w-full py-5 rounded-[1.5rem] bg-slate-950 text-white font-black text-[10px] tracking-[0.2em] uppercase flex items-center justify-center gap-3 transition-all active:scale-95 hover:bg-[#118AB2] disabled:bg-slate-300 shadow-xl">
+                        {loadingMap === ally.id ? <Loader2 className="animate-spin" size={16}/> : <MapIcon size={16}/>} CÓMO LLEGAR
+                      </button>
+                      {mapResults[ally.id] && !loadingMap && (
+                        <div className="mt-6 p-6 bg-[#F2E8CF]/60 rounded-3xl border border-[#F2E8CF] animate-in zoom-in-95 shadow-inner">
+                          <p className="text-[11px] font-bold text-slate-700 leading-relaxed mb-4">{mapResults[ally.id].text}</p>
+                          {mapResults[ally.id].links.map((link, i) => (
+                            <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition-all text-[#118AB2] text-[9px] font-black uppercase tracking-widest">VER EN MAPA <ExternalLink size={14}/></a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                 </div>
+               ))}
+             </div>
           </div>
         )}
 
         {activeTab === 'feedback' && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 py-4 space-y-8">
-            <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-white overflow-hidden">
-              <h2 className="text-3xl font-black text-slate-900 mb-6 flex items-center gap-3">
-                <MessageSquare className="text-[#118AB2]" size={32} />
-                Danos tu Opinión
-              </h2>
-              
-              <form onSubmit={submitFeedback} className="space-y-4 mb-10">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Nombre</label>
-                  <input 
-                    type="text" 
-                    value={newFeedback.name} 
-                    onChange={(e) => setNewFeedback({ ...newFeedback, name: e.target.value })} 
-                    className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-2xl p-4 font-bold outline-none transition-all"
-                    placeholder="Tu nombre aquí..."
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest px-2">Comentario</label>
-                  <textarea 
-                    value={newFeedback.comment} 
-                    onChange={(e) => setNewFeedback({ ...newFeedback, comment: e.target.value })} 
-                    className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-2xl p-4 font-bold outline-none transition-all min-h-[120px]"
-                    placeholder="Comparte tu experiencia o sugerencia..."
-                    required
-                  />
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={feedbackStatus === 'sending'}
-                  className={`w-full py-5 rounded-2xl font-black text-lg flex items-center justify-center gap-3 transition-all ${
-                    feedbackStatus === 'success' ? 'bg-emerald-500 text-white scale-[0.98]' : 
-                    feedbackStatus === 'sending' ? 'bg-slate-400 text-white cursor-not-allowed' :
-                    'bg-slate-900 text-white hover:bg-[#118AB2] active:scale-95 shadow-lg'
-                  }`}
-                >
-                  {feedbackStatus === 'sending' ? <Loader2 className="animate-spin" /> : feedbackStatus === 'success' ? <CheckCircle2 size={24} /> : <Send size={20} />}
-                  {feedbackStatus === 'sending' ? 'ENVIANDO...' : feedbackStatus === 'success' ? '¡ENVIADO!' : 'ENVIAR OPINIÓN'}
-                </button>
-              </form>
-
-              <div className="space-y-6 pt-8 border-t border-slate-100">
-                <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4">Experiencias Recientes</h3>
-                {feedbacks.length > 0 ? (
-                  feedbacks.map((f) => (
-                    <div key={f.id} className="bg-slate-50 p-6 rounded-[2rem] relative group border border-slate-100/50 hover:border-[#118AB2]/30 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
+          <div className="animate-in fade-in zoom-in-95 duration-500 py-4">
+             <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-white">
+               <h2 className="text-3xl font-black text-slate-900 mb-8 text-center flex items-center justify-center gap-3">
+                 <MessageSquare className="text-[#118AB2]" size={32} /> Tu opinión
+               </h2>
+               <form onSubmit={submitFeedback} className="space-y-6 mb-12">
+                 <input type="text" value={newFeedback.name} onChange={(e) => setNewFeedback(p => ({ ...p, name: e.target.value }))} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-[1.5rem] p-5 font-bold outline-none transition-all shadow-inner" placeholder="Tu nombre" required />
+                 <textarea value={newFeedback.comment} onChange={(e) => setNewFeedback(p => ({ ...p, comment: e.target.value }))} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-[1.5rem] p-5 font-bold outline-none transition-all min-h-[140px] shadow-inner" placeholder="Escribe tu mensaje..." required />
+                 <button type="submit" disabled={feedbackStatus !== 'idle'} className={`w-full py-6 rounded-[2rem] font-black text-lg flex items-center justify-center gap-3 shadow-2xl transition-all active:scale-95 ${feedbackStatus === 'success' ? 'bg-emerald-500 text-white' : feedbackStatus === 'sending' ? 'bg-slate-400 text-white' : 'bg-slate-900 text-white hover:bg-[#118AB2]'}`}>
+                    {feedbackStatus === 'sending' ? <Loader2 className="animate-spin" /> : feedbackStatus === 'success' ? <CheckCircle2 size={24} /> : <Send size={24} />}
+                    {feedbackStatus === 'sending' ? 'ENVIANDO...' : feedbackStatus === 'success' ? '¡GRACIAS!' : 'PUBLICAR'}
+                 </button>
+               </form>
+               <div className="space-y-6">
+                 {feedbacks.map(f => (
+                   <div key={f.id} className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 relative group transition-all hover:bg-white">
+                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-[#118AB2]/10 flex items-center justify-center text-[#118AB2]">
-                            <User size={16} />
-                          </div>
-                          <span className="font-black text-slate-900 text-sm">{f.name}</span>
+                           <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center text-[#118AB2] shadow-sm"><User size={16}/></div>
+                           <span className="font-black text-slate-900 text-[13px]">{f.name}</span>
                         </div>
-                        <div className="flex items-center gap-1 text-slate-400 text-[9px] font-bold">
-                          <Calendar size={12} />
-                          {f.timestamp?.toDate ? f.timestamp.toDate().toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recién enviado'}
-                        </div>
-                      </div>
-                      <p className="text-slate-600 font-medium text-sm leading-relaxed italic">"{f.comment}"</p>
-                      {isAdmin && (
-                        <button 
-                          onClick={() => deleteFeedback(f.id)}
-                          className="absolute -top-2 -right-2 bg-rose-500 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600"
-                        >
-                          <Trash size={14} />
-                        </button>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-10 opacity-50">
-                    <Footprints className="mx-auto mb-2 text-slate-300" />
-                    <p className="text-xs font-bold uppercase tracking-widest text-slate-400">Aún no hay opiniones. ¡Sé el primero!</p>
-                  </div>
-                )}
-              </div>
-            </div>
+                        <span className="text-slate-300 text-[10px] font-bold">{f.timestamp?.toDate ? f.timestamp.toDate().toLocaleDateString('es-EC') : 'Recién'}</span>
+                     </div>
+                     <p className="text-slate-600 font-semibold text-sm italic leading-relaxed">"{f.comment}"</p>
+                     {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm('¿Borrar opinión?')) await deleteDoc(doc(db, 'feedbacks', f.id)); })} className="absolute top-4 right-4 text-rose-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash size={14}/></button>}
+                   </div>
+                 ))}
+               </div>
+             </div>
           </div>
         )}
       </main>
 
       {showAdminLogin && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-6">
-          <div className="bg-white w-full max-sm rounded-[2rem] p-8 shadow-2xl animate-in zoom-in-95 duration-200">
-            <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-2"><ShieldCheck className="text-[#118AB2]" /> Acceso Maestro</h2>
-            <form onSubmit={handleAdminLogin} className="space-y-6">
-              <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-slate-50 border-2 border-[#118AB2]/20 focus:border-[#118AB2] rounded-2xl p-4 outline-none text-center text-2xl font-black tracking-widest" placeholder="****" autoFocus />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-bold text-slate-400 py-4 hover:text-slate-600 transition-colors">Cancelar</button>
-                <button type="submit" className="flex-1 bg-[#118AB2] text-white py-4 rounded-xl font-black hover:brightness-110 shadow-lg active:scale-95 transition-all">ENTRAR</button>
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[200] flex items-center justify-center p-6 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-300">
+            <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">Acceso Maestro</h2>
+            <form onSubmit={(e) => { e.preventDefault(); if (adminPassword === '1996') { setIsAdmin(true); setShowAdminLogin(false); setAdminPassword(''); } else alert("Clave incorrecta."); }} className="space-y-6">
+              <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 focus:border-[#118AB2] rounded-[1.5rem] p-5 outline-none text-center text-5xl font-black tracking-widest" placeholder="****" autoFocus />
+              <div className="flex gap-4">
+                <button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-black text-slate-400 py-4 uppercase text-[10px] tracking-widest">Cerrar</button>
+                <button type="submit" className="flex-1 bg-slate-950 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#118AB2] shadow-xl transition-all">Entrar</button>
               </div>
             </form>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ListEditor({ items, field, title, icon: Icon, colorClass, isAdmin, content }: any) {
+  const updateList = async (field: keyof SiteContent, index: number, newValue: string | null) => {
+    // Asegurar que siempre sea un array
+    const currentList = Array.isArray(content[field]) ? [...(content[field] as string[])] : [];
+    
+    if (newValue === null) {
+      currentList.splice(index, 1);
+    } else if (index === -1) {
+      currentList.push('Nueva información...');
+    } else {
+      currentList[index] = newValue;
+    }
+
+    try {
+      await updateDoc(doc(db, 'content', 'main'), { [field]: currentList });
+    } catch (e) {
+      console.error("Error updating list:", e);
+      alert("No se pudo actualizar el registro.");
+    }
+  };
+
+  return (
+    <div className={`${colorClass} p-6 rounded-[2.5rem] border shadow-sm transition-all`}>
+      <div className="flex justify-between items-center mb-5 px-2">
+        <h3 className="flex items-center gap-2 font-black uppercase tracking-widest text-[9px] opacity-80"><Icon size={14}/> {title}</h3>
+        {isAdmin && (
+          <button 
+            onClick={() => updateList(field, -1, '')} 
+            className="bg-white/60 hover:bg-white p-1 rounded-lg shadow-sm hover:scale-110 active:scale-90 transition-all"
+          >
+            <Plus size={14} />
+          </button>
+        )}
+      </div>
+      <ul className="space-y-3">
+        {(items || []).map((n: string, i: number) => (
+          <li key={i} className="flex items-start gap-2 group bg-white/40 p-2.5 rounded-2xl border border-white/20">
+            <div className="flex-1">
+              <EditableText isAdmin={isAdmin} text={n} onSave={(val: string) => updateList(field, i, val)} className="text-[12px] font-bold text-slate-800 leading-tight" multiline={isAdmin} />
+            </div>
+            {isAdmin && <button onClick={() => updateList(field, i, null)} className="text-slate-400 opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all"><Trash2 size={14} /></button>}
+          </li>
+        ))}
+        {(!items || items.length === 0) && isAdmin && (
+          <p className="text-[10px] text-slate-400 italic text-center py-2">Haz clic en + para agregar información.</p>
+        )}
+      </ul>
     </div>
   );
 }
