@@ -158,13 +158,23 @@ export default function App() {
   }, []);
 
   const handleEasterEggClick = () => {
-    setClickCount(prev => prev + 1);
-    if (clickTimer.current) clearTimeout(clickTimer.current);
-    clickTimer.current = setTimeout(() => setClickCount(0), 3000);
-    if (clickCount + 1 >= 5) {
-      setShowAdminLogin(true);
-      setClickCount(0);
-    }
+    if (isAdmin) return; // Si ya es admin, no hacer nada
+    
+    setClickCount(prev => {
+      const newCount = prev + 1;
+      
+      if (clickTimer.current) clearTimeout(clickTimer.current);
+      
+      clickTimer.current = setTimeout(() => {
+        setClickCount(0);
+      }, 2000); // Tienes 2 segundos entre pulsaciones
+
+      if (newCount >= 5) {
+        setShowAdminLogin(true);
+        return 0;
+      }
+      return newCount;
+    });
   };
 
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -382,7 +392,9 @@ export default function App() {
       <header className="relative h-[40vh] md:h-[50vh] w-full">
         <EditableImage isAdmin={isAdmin} src={content.heroImage} onSave={(url) => updateContent({ heroImage: url })} className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
-          <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => updateContent({ heroTitle: val })} className="text-4xl font-black text-white mb-2" />
+          <div onClick={handleEasterEggClick} className="cursor-default select-none active:opacity-90">
+            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => updateContent({ heroTitle: val })} className="text-4xl font-black text-white mb-2" />
+          </div>
           <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => updateContent({ heroSubtitle: val })} className="text-lg text-white/80 font-medium" />
         </div>
       </header>
@@ -405,7 +417,6 @@ export default function App() {
 
         {activeTab === 'info' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-             <div onClick={handleEasterEggClick} className="opacity-0 absolute top-0 left-0 w-10 h-10 cursor-default" />
              <TabView
               tabs={[
                 { id: 'normativas', label: 'Normativas', content: (
