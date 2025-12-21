@@ -10,11 +10,74 @@ import {
 interface ReservationModalProps {
   ally: Ally;
   onClose: () => void;
+  language?: 'es' | 'en';
 }
 
 type Step = 'select' | 'details' | 'payment' | 'finish';
 
-export default function ReservationModal({ ally, onClose }: ReservationModalProps) {
+const modalTranslations = {
+  es: {
+    steps: { details: 'Paso 2 de 3: Tus datos', select: 'Selección' },
+    labels: {
+      room: 'Reserva de Habitaciones',
+      menu: 'Reserva de Mesa / Platos',
+      selectRoom: 'Selecciona tu habitación',
+      selectMenu: 'Selecciona tu menú',
+      empty: 'No hay opciones disponibles',
+      customerName: 'Tu Nombre Completo',
+      resDate: 'Fecha de la Reserva',
+      transfer: 'Pago por Transferencia',
+      transferDesc: 'Para confirmar tu reserva, el local requiere el pago anticipado. Copia los datos y adjunta el comprobante.',
+      bankInfo: 'Información Bancaria',
+      total: 'Total a Transferir',
+      taxes: 'Incluye impuestos',
+      continue: 'CONTINUAR',
+      back: 'ATRÁS',
+      goPayment: 'IR AL PAGO',
+      sendProof: 'ENVIAR COMPROBANTE',
+      placeholderName: 'Ej: Juan Pérez',
+      waGreeting: '¡Hola!',
+      waBooking: 'Me gustaría realizar una reserva:',
+      waCustomer: 'Cliente',
+      waDate: 'Fecha',
+      waOrder: 'Pedido',
+      waTotal: 'Total',
+      waFoot: 'Escribo para confirmar disponibilidad y proceder con el pago.'
+    }
+  },
+  en: {
+    steps: { details: 'Step 2 of 3: Your details', select: 'Selection' },
+    labels: {
+      room: 'Room Booking',
+      menu: 'Table / Dishes Booking',
+      selectRoom: 'Select your room',
+      selectMenu: 'Select your menu',
+      empty: 'No options available',
+      customerName: 'Your Full Name',
+      resDate: 'Reservation Date',
+      transfer: 'Bank Transfer Payment',
+      transferDesc: 'To confirm your booking, the spot requires advance payment. Copy the details and attach proof.',
+      bankInfo: 'Bank Information',
+      total: 'Total to Transfer',
+      taxes: 'Taxes included',
+      continue: 'CONTINUE',
+      back: 'BACK',
+      goPayment: 'GO TO PAYMENT',
+      sendProof: 'SEND PROOF',
+      placeholderName: 'e.g., John Doe',
+      waGreeting: 'Hello!',
+      waBooking: 'I would like to make a reservation:',
+      waCustomer: 'Customer',
+      waDate: 'Date',
+      waOrder: 'Order',
+      waTotal: 'Total',
+      waFoot: 'I am writing to confirm availability and proceed with payment.'
+    }
+  }
+};
+
+export default function ReservationModal({ ally, onClose, language = 'es' }: ReservationModalProps) {
+  const mt = modalTranslations[language];
   const [step, setStep] = useState<Step>('select');
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   const [customerInfo, setCustomerInfo] = useState({ name: '', date: '' });
@@ -31,10 +94,7 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
     .reduce((acc, i) => acc + parseFloat(i.price || '0'), 0);
 
   const handleFinish = () => {
-    if (!customerInfo.name || !customerInfo.date) {
-      alert("Por favor completa tus datos.");
-      return;
-    }
+    if (!customerInfo.name || !customerInfo.date) return;
 
     const selectedList = (ally.items || [])
       .filter(i => selectedItems[i.id])
@@ -42,13 +102,13 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
       .join('\n');
 
     const message = encodeURIComponent(
-      `¡Hola ${ally.name}! 👋\n\n` +
-      `Me gustaría realizar una reserva:\n` +
-      `👤 Cliente: ${customerInfo.name}\n` +
-      `📅 Fecha: ${customerInfo.date}\n\n` +
-      `📦 Pedido:\n${selectedList}\n\n` +
-      `💰 Total: $${total.toFixed(2)}\n\n` +
-      `Escribo para confirmar disponibilidad y proceder con el pago.`
+      `${mt.labels.waGreeting} ${ally.name}! 👋\n\n` +
+      `${mt.labels.waBooking}\n` +
+      `👤 ${mt.labels.waCustomer}: ${customerInfo.name}\n` +
+      `📅 ${mt.labels.waDate}: ${customerInfo.date}\n\n` +
+      `📦 ${mt.labels.waOrder}:\n${selectedList}\n\n` +
+      `💰 ${mt.labels.waTotal}: $${total.toFixed(2)}\n\n` +
+      `${mt.labels.waFoot}`
     );
 
     window.open(`https://wa.me/${ally.whatsapp?.replace(/\+/g, '')}?text=${message}`, '_blank');
@@ -66,7 +126,7 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
           <div>
             <h3 className="text-2xl font-black text-slate-900 leading-none">{ally.name}</h3>
             <p className="text-[10px] font-black uppercase tracking-widest text-[#118AB2] mt-2">
-              {isHotel ? 'Reserva de Habitaciones' : 'Reserva de Mesa / Platos'}
+              {isHotel ? mt.labels.room : mt.labels.menu}
             </p>
           </div>
           <button onClick={onClose} className="p-3 bg-slate-100 rounded-full text-slate-400 hover:text-rose-500 transition-all active:scale-90">
@@ -84,7 +144,7 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
                   {isHotel ? <Bed size={20}/> : <Utensils size={20}/>}
                 </div>
                 <h4 className="text-sm font-black uppercase tracking-wider text-slate-800">
-                  {isHotel ? 'Selecciona tu habitación' : 'Selecciona tu menú'}
+                  {isHotel ? mt.labels.selectRoom : mt.labels.selectMenu}
                 </h4>
               </div>
               <div className="grid gap-4">
@@ -118,7 +178,7 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
                 {(ally.items || []).length === 0 && (
                   <div className="text-center py-10 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
                     <Info className="mx-auto text-slate-300 mb-2" size={32}/>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No hay opciones disponibles</p>
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{mt.labels.empty}</p>
                   </div>
                 )}
               </div>
@@ -128,10 +188,10 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
           {step === 'details' && (
             <div className="space-y-6 animate-in slide-in-from-right-4">
               <div className="bg-white p-2 text-center mb-4">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-[#118AB2]">Paso 2 de 3: Tus datos</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-[#118AB2]">{mt.steps.details}</p>
               </div>
               <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">Tu Nombre Completo</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">{mt.labels.customerName}</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
                   <input 
@@ -139,13 +199,13 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
                     value={customerInfo.name}
                     onChange={(e) => setCustomerInfo(p => ({ ...p, name: e.target.value }))}
                     className="w-full bg-white border-2 border-slate-100 rounded-2xl p-4 pl-12 font-bold outline-none focus:border-[#118AB2] transition-all" 
-                    placeholder="Ej: Juan Pérez"
+                    placeholder={mt.labels.placeholderName}
                   />
                 </div>
               </div>
 
               <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">Fecha de la Reserva</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">{mt.labels.resDate}</label>
                 <div className="relative">
                   <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
                   <input 
@@ -165,21 +225,19 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
                 <div className="w-16 h-16 bg-amber-500 rounded-3xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-amber-500/20">
                   <Wallet size={32}/>
                 </div>
-                <h4 className="text-xl font-black text-amber-900 mb-2">Pago por Transferencia</h4>
-                <p className="text-xs text-amber-700 font-medium leading-relaxed">
-                  Para confirmar tu reserva, el local requiere el pago anticipado. Copia los datos y adjunta el comprobante.
-                </p>
+                <h4 className="text-xl font-black text-amber-900 mb-2">{mt.labels.transfer}</h4>
+                <p className="text-xs text-amber-700 font-medium leading-relaxed">{mt.labels.transferDesc}</p>
                 <div className="mt-6 p-6 bg-white/80 rounded-3xl text-left border border-amber-100 shadow-sm">
-                  <p className="text-[8px] font-black uppercase tracking-widest text-amber-600 mb-3">Información Bancaria</p>
+                  <p className="text-[8px] font-black uppercase tracking-widest text-amber-600 mb-3">{mt.labels.bankInfo}</p>
                   <pre className="text-xs font-bold text-slate-800 whitespace-pre-wrap font-['Montserrat'] leading-relaxed">
-                    {ally.bankDetails || 'Consulta los datos bancarios directamente con el local vía WhatsApp.'}
+                    {ally.bankDetails || '...'}
                   </pre>
                 </div>
               </div>
               <div className="bg-slate-950 p-6 rounded-[2rem] text-white flex justify-between items-center shadow-2xl">
                 <div className="text-left">
-                   <span className="text-[8px] font-black uppercase tracking-widest opacity-60 block">Total a Transferir</span>
-                   <span className="text-xs font-bold text-blue-400">Incluye impuestos</span>
+                   <span className="text-[8px] font-black uppercase tracking-widest opacity-60 block">{mt.labels.total}</span>
+                   <span className="text-xs font-bold text-blue-400">{mt.labels.taxes}</span>
                 </div>
                 <span className="text-3xl font-black tracking-tighter">$ {total.toFixed(2)}</span>
               </div>
@@ -196,29 +254,29 @@ export default function ReservationModal({ ally, onClose }: ReservationModalProp
               onClick={() => setStep('details')}
               className="w-full py-6 rounded-[2.5rem] bg-slate-900 text-white font-black text-xs tracking-[0.2em] uppercase flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all disabled:opacity-30"
             >
-              CONTINUAR <ArrowRight size={18}/>
+              {mt.labels.continue} <ArrowRight size={18}/>
             </button>
           )}
           {step === 'details' && (
             <div className="flex gap-4">
-              <button onClick={() => setStep('select')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">ATRÁS</button>
+              <button onClick={() => setStep('select')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{mt.labels.back}</button>
               <button 
                 disabled={!customerInfo.name || !customerInfo.date}
                 onClick={() => setStep('payment')} 
                 className="flex-[2] py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all disabled:opacity-30"
               >
-                IR AL PAGO <CreditCard size={18}/>
+                {mt.labels.goPayment} <CreditCard size={18}/>
               </button>
             </div>
           )}
           {step === 'payment' && (
             <div className="flex gap-4">
-              <button onClick={() => setStep('details')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">ATRÁS</button>
+              <button onClick={() => setStep('details')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{mt.labels.back}</button>
               <button 
                 onClick={handleFinish}
                 className="flex-[2] py-6 rounded-[2rem] bg-[#25D366] text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
               >
-                ENVIAR COMPROBANTE <Send size={18}/>
+                {mt.labels.sendProof} <Send size={18}/>
               </button>
             </div>
           )}
