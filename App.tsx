@@ -6,7 +6,7 @@ import {
   Eye, EyeOff, Send, Plus, Trash, ShoppingBag,
   MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw,
   Wallet, Phone, Calendar, ShoppingCart, X, CreditCard, DollarSign,
-  Settings, Heart, Share2, Sparkles, Briefcase, Tag
+  Settings, Heart, Share2, Sparkles, Briefcase, Tag, ArrowRight
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
@@ -46,8 +46,6 @@ const INITIAL_CONTENT: SiteContent = {
   }
 };
 
-// Interface for ActivityCard props to fix TypeScript assignment errors
-// Added optional key property to satisfy TypeScript when rendering in a list mapping
 interface ActivityCardProps {
   activity: Activity;
   isAdmin: boolean;
@@ -157,22 +155,46 @@ export default function App() {
 
   const getDirections = async (ally: Ally) => {
     setLoadingMap(ally.id);
+    let latLng = undefined;
+    
+    // Intentar obtener ubicación para grounding real
     try {
-      // Corrected model to 'gemini-2.5-flash' as Google Maps grounding is only supported on Gemini 2.5 series
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 6000 });
+      });
+      latLng = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+    } catch (e) {
+      console.warn("Geolocation permission denied or timed out.");
+    }
+
+    try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Instrucciones precisas para llegar a ${ally.name} en ${ally.address || 'Puerto López, Manabí, Ecuador'}.`,
-        config: { tools: [{ googleMaps: {} }] },
+        contents: `Instrucciones de ruta para llegar a ${ally.name} en ${ally.address || 'Puerto López, Manabí'}. Mi ubicación actual es: ${latLng ? `${latLng.latitude}, ${latLng.longitude}` : 'Desconocida (asume que estoy en Los Frailes)'}.`,
+        config: { 
+          tools: [{ googleMaps: {} }],
+          toolConfig: latLng ? {
+            retrievalConfig: {
+              latLng: latLng
+            }
+          } : undefined
+        },
       });
+      
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const mapsLinks = chunks.filter((c: any) => c.maps).map((c: any) => c.maps);
+      
       setMapResults(prev => ({ 
         ...prev, 
-        [ally.id]: { text: response.text || "Ruta generada.", links: mapsLinks } 
+        [ally.id]: { text: response.text || "Calculando mejor ruta...", links: mapsLinks } 
       }));
     } catch (err) {
       console.error(err);
+      alert("No se pudo conectar con el servicio de mapas.");
     } finally {
       setLoadingMap(null);
     }
@@ -260,7 +282,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 mt-8">
         <nav className="flex items-stretch bg-white rounded-[2.5rem] shadow-2xl p-1.5 mb-10 border border-slate-100 sticky top-6 z-[80] backdrop-blur-xl bg-white/80 overflow-x-auto no-scrollbar">
           {[
-            { id: 'info', icon: Info, label: 'Info' },
+            { id: 'info', icon: Info, label: 'Guía' },
             { id: 'explora', icon: Waves, label: 'Explora' },
             { id: 'travel', icon: Globe, label: 'Turismo' },
             { id: 'aliados', icon: Utensils, label: 'Locales', hidden: !content.aliadosVisible && !isAdmin },
@@ -300,7 +322,6 @@ export default function App() {
 
         {activeTab === 'explora' && (
           <div className="space-y-16 animate-in fade-in py-4">
-            {/* Actividades Section */}
             <section>
               <div className="flex justify-between items-center mb-8 px-2">
                 <div className="flex items-center gap-3">
@@ -325,7 +346,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* Servicios Section */}
             <section>
               <div className="flex justify-between items-center mb-8 px-2">
                 <div className="flex items-center gap-3">
@@ -364,7 +384,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* Ecuador Travel Section */}
             <div className="bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative">
                <div className="h-[300px] relative">
                  <EditableImage 
@@ -414,7 +433,6 @@ export default function App() {
                </div>
             </div>
 
-            {/* Arte Del Mar Section (Store) */}
             {(content.tiendaVisible || isAdmin) && (
               <div className={`bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative transition-all duration-500 ${!content.tiendaVisible && isAdmin ? 'opacity-60 grayscale scale-95' : ''}`}>
                  {!content.tiendaVisible && isAdmin && (
@@ -515,7 +533,7 @@ export default function App() {
 
                       <EditableText isAdmin={isAdmin} text={ally.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed mb-6" multiline />
                       
-                      <div className="grid grid-cols-2 gap-4 mb-8">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
                         <button onClick={() => setSelectedAllyForBooking(ally)} className="py-4 rounded-[1.5rem] bg-[#118AB2] text-white font-black text-[10px] tracking-widest uppercase flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                           <Calendar size={16}/> RESERVAR
                         </button>
@@ -523,6 +541,48 @@ export default function App() {
                           {loadingMap === ally.id ? <Loader2 className="animate-spin" size={16}/> : <MapIcon size={16}/>} LLEGAR
                         </button>
                       </div>
+
+                      {/* Resultado de Ruta de Mapas Grounding */}
+                      {mapResults[ally.id] && !loadingMap && (
+                        <div className="mt-6 p-6 bg-blue-50 rounded-3xl border border-blue-100 animate-in zoom-in-95 shadow-lg">
+                          <div className="flex items-center gap-3 mb-4">
+                             <div className="bg-blue-600 text-white p-2 rounded-xl">
+                               <MapIcon size={18}/>
+                             </div>
+                             <h4 className="text-[11px] font-black uppercase tracking-widest text-blue-900">Guía de Ruta</h4>
+                          </div>
+                          <p className="text-[12px] font-bold text-slate-700 leading-relaxed mb-6">{mapResults[ally.id].text}</p>
+                          
+                          {mapResults[ally.id].links.length > 0 ? (
+                            <div className="grid gap-3">
+                              {mapResults[ally.id].links.map((link, i) => (
+                                <a 
+                                  key={i} 
+                                  href={link.uri} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="flex items-center justify-between bg-white p-5 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all text-blue-600 hover:bg-blue-600 hover:text-white group"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <ExternalLink size={16}/>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{link.title || "Abrir en Google Maps"}</span>
+                                  </div>
+                                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <a 
+                              href={`https://www.google.com/maps/search/${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="flex items-center justify-center gap-3 bg-slate-900 text-white p-5 rounded-[1.5rem] shadow-xl text-[10px] font-black uppercase tracking-widest"
+                            >
+                              BUSCAR EN MAPAS <ExternalLink size={16}/>
+                            </a>
+                          )}
+                        </div>
+                      )}
 
                       {isAdmin && (
                         <div className="mt-8 p-6 bg-slate-50 rounded-[2.5rem] border border-slate-200">
@@ -599,15 +659,6 @@ export default function App() {
                           </div>
                         </div>
                       )}
-
-                      {mapResults[ally.id] && !loadingMap && (
-                        <div className="mt-6 p-6 bg-[#F2E8CF]/60 rounded-3xl border border-[#F2E8CF] animate-in zoom-in-95 shadow-inner">
-                          <p className="text-[11px] font-bold text-slate-700 leading-relaxed mb-4">{mapResults[ally.id].text}</p>
-                          {mapResults[ally.id].links.map((link, i) => (
-                            <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-4 rounded-2xl shadow-sm hover:shadow-md transition-all text-[#118AB2] text-[9px] font-black uppercase tracking-widest">VER EN MAPA <ExternalLink size={14}/></a>
-                          ))}
-                        </div>
-                      )}
                     </div>
                  </div>
                ))}
@@ -671,10 +722,6 @@ export default function App() {
   );
 }
 
-/**
- * Reusable card component for Activities and Services in the Explora tab
- * Fixed props interface to prevent TS assignment errors with the key prop
- */
 function ActivityCard({ activity, isAdmin }: ActivityCardProps) {
   const handleAdminAction = async (action: () => Promise<void>) => {
     if (!isAdmin) return;
@@ -705,7 +752,6 @@ function ActivityCard({ activity, isAdmin }: ActivityCardProps) {
           </button>
         )}
         
-        {/* Precio Tag / Editable */}
         <div className="absolute top-6 right-16 sm:right-6 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
           <Tag size={12}/>
           <div className="flex items-center">
