@@ -6,7 +6,7 @@ import {
   Eye, EyeOff, Send, Plus, Trash, ShoppingBag,
   MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw,
   Wallet, Phone, Calendar, ShoppingCart, X, CreditCard, DollarSign,
-  Settings, Heart, Share2, Sparkles, Briefcase, Tag, ArrowRight
+  Settings, Heart, Share2, Sparkles, Briefcase, Tag, ArrowRight, Navigation
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
@@ -157,44 +157,60 @@ export default function App() {
     setLoadingMap(ally.id);
     let latLng = undefined;
     
-    // Intentar obtener ubicación para grounding real
+    // Intentar obtener ubicación con timeout más corto para no bloquear al usuario
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 6000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
       });
       latLng = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude
       };
     } catch (e) {
-      console.warn("Geolocation permission denied or timed out.");
+      console.warn("Geolocation permission denied or timed out. Using default.");
     }
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Instrucciones de ruta para llegar a ${ally.name} en ${ally.address || 'Puerto López, Manabí'}. Mi ubicación actual es: ${latLng ? `${latLng.latitude}, ${latLng.longitude}` : 'Desconocida (asume que estoy en Los Frailes)'}.`,
+        contents: `Instrucciones detalladas de cómo llegar a ${ally.name} ubicado en ${ally.address || 'Puerto López, Manabí'}.`,
         config: { 
           tools: [{ googleMaps: {} }],
-          toolConfig: latLng ? {
+          toolConfig: {
             retrievalConfig: {
-              latLng: latLng
+              latLng: latLng || { latitude: -1.5544, longitude: -80.8206 } // Coordenadas de Los Frailes por defecto
             }
-          } : undefined
+          }
         },
       });
       
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const mapsLinks = chunks.filter((c: any) => c.maps).map((c: any) => c.maps);
       
+      // Si la IA no devuelve enlaces, generamos uno manual para que siempre sea funcional
+      const finalLinks = mapsLinks.length > 0 ? mapsLinks : [{
+        uri: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ally.name + " " + (ally.address || "Puerto López"))}`,
+        title: "Abrir ruta en Google Maps"
+      }];
+
       setMapResults(prev => ({ 
         ...prev, 
-        [ally.id]: { text: response.text || "Calculando mejor ruta...", links: mapsLinks } 
+        [ally.id]: { text: response.text || "Calculando la mejor ruta para ti...", links: finalLinks } 
       }));
     } catch (err) {
-      console.error(err);
-      alert("No se pudo conectar con el servicio de mapas.");
+      console.error("Gemini Error:", err);
+      // FALLBACK: Si falla la IA, mostramos un enlace directo para no dejar al usuario sin opción
+      setMapResults(prev => ({ 
+        ...prev, 
+        [ally.id]: { 
+          text: "No pudimos generar una descripción personalizada en este momento, pero puedes ver la ruta directa aquí:", 
+          links: [{ 
+            uri: `https://www.google.com/maps/search/${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`, 
+            title: "Abrir en Google Maps" 
+          }] 
+        } 
+      }));
     } finally {
       setLoadingMap(null);
     }
@@ -542,45 +558,44 @@ export default function App() {
                         </button>
                       </div>
 
-                      {/* Resultado de Ruta de Mapas Grounding */}
                       {mapResults[ally.id] && !loadingMap && (
-                        <div className="mt-6 p-6 bg-blue-50 rounded-3xl border border-blue-100 animate-in zoom-in-95 shadow-lg">
+                        <div className="mt-6 p-6 bg-blue-50 rounded-3xl border border-blue-100 animate-in zoom-in-95 shadow-lg border-l-4 border-l-blue-600">
                           <div className="flex items-center gap-3 mb-4">
-                             <div className="bg-blue-600 text-white p-2 rounded-xl">
-                               <MapIcon size={18}/>
+                             <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow-lg shadow-blue-600/20">
+                               <Navigation size={18}/>
                              </div>
-                             <h4 className="text-[11px] font-black uppercase tracking-widest text-blue-900">Guía de Ruta</h4>
+                             <h4 className="text-[11px] font-black uppercase tracking-widest text-blue-900">Guía de Llegada</h4>
                           </div>
-                          <p className="text-[12px] font-bold text-slate-700 leading-relaxed mb-6">{mapResults[ally.id].text}</p>
+                          <p className="text-[12px] font-bold text-slate-700 leading-relaxed mb-6 bg-white/40 p-4 rounded-2xl">{mapResults[ally.id].text}</p>
                           
-                          {mapResults[ally.id].links.length > 0 ? (
-                            <div className="grid gap-3">
-                              {mapResults[ally.id].links.map((link, i) => (
+                          <div className="grid gap-3">
+                            {mapResults[ally.id].links.length > 0 ? (
+                              mapResults[ally.id].links.map((link, i) => (
                                 <a 
                                   key={i} 
                                   href={link.uri} 
                                   target="_blank" 
                                   rel="noreferrer" 
-                                  className="flex items-center justify-between bg-white p-5 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all text-blue-600 hover:bg-blue-600 hover:text-white group"
+                                  className="flex items-center justify-between bg-white p-5 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all text-blue-600 hover:bg-blue-600 hover:text-white group border border-blue-100"
                                 >
                                   <div className="flex items-center gap-3">
-                                    <ExternalLink size={16}/>
-                                    <span className="text-[10px] font-black uppercase tracking-widest">{link.title || "Abrir en Google Maps"}</span>
+                                    <MapIcon size={16}/>
+                                    <span className="text-[10px] font-black uppercase tracking-widest">{link.title || "Ver Ruta en Mapa"}</span>
                                   </div>
                                   <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/>
                                 </a>
-                              ))}
-                            </div>
-                          ) : (
-                            <a 
-                              href={`https://www.google.com/maps/search/${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="flex items-center justify-center gap-3 bg-slate-900 text-white p-5 rounded-[1.5rem] shadow-xl text-[10px] font-black uppercase tracking-widest"
-                            >
-                              BUSCAR EN MAPAS <ExternalLink size={16}/>
-                            </a>
-                          )}
+                              ))
+                            ) : (
+                              <a 
+                                href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="flex items-center justify-center gap-3 bg-slate-900 text-white p-5 rounded-[1.5rem] shadow-xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors"
+                              >
+                                BUSCAR RUTA DIRECTA <ExternalLink size={16}/>
+                              </a>
+                            )}
+                          </div>
                         </div>
                       )}
 
