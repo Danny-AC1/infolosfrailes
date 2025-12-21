@@ -282,7 +282,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 mt-8">
         <nav className="flex items-stretch bg-white rounded-[2.5rem] shadow-2xl p-1.5 mb-10 border border-slate-100 sticky top-6 z-[80] backdrop-blur-xl bg-white/80 overflow-x-auto no-scrollbar">
           {[
-            { id: 'info', icon: Info, label: 'Guía' },
+            { id: 'info', icon: Info, label: 'Info' },
             { id: 'explora', icon: Waves, label: 'Explora' },
             { id: 'travel', icon: Globe, label: 'Turismo' },
             { id: 'aliados', icon: Utensils, label: 'Locales', hidden: !content.aliadosVisible && !isAdmin },
