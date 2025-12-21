@@ -32,6 +32,15 @@ export interface Activity {
   price?: string;
   type: 'activity' | 'service';
   icon?: string;
+  timestamp: any;
+}
+
+export interface AllyItem {
+  id: string;
+  name: string;
+  price: string;
+  description: string;
+  image: string;
 }
 
 export interface Ally {
@@ -41,6 +50,10 @@ export interface Ally {
   description: string;
   image: string;
   address?: string;
+  whatsapp?: string;
+  bankDetails?: string;
+  items?: AllyItem[];
+  timestamp: any;
 }
 
 export interface Feedback {
