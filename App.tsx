@@ -6,7 +6,7 @@ import {
   Eye, EyeOff, Send, Plus, Trash, ShoppingBag,
   MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw,
   Wallet, Phone, Calendar, ShoppingCart, X, CreditCard, DollarSign,
-  Settings, Heart, Share2, Sparkles, Briefcase
+  Settings, Heart, Share2, Sparkles, Briefcase, Tag
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
@@ -47,9 +47,11 @@ const INITIAL_CONTENT: SiteContent = {
 };
 
 // Interface for ActivityCard props to fix TypeScript assignment errors
+// Added optional key property to satisfy TypeScript when rendering in a list mapping
 interface ActivityCardProps {
   activity: Activity;
   isAdmin: boolean;
+  key?: React.Key;
 }
 
 export default function App() {
@@ -156,7 +158,7 @@ export default function App() {
   const getDirections = async (ally: Ally) => {
     setLoadingMap(ally.id);
     try {
-      // Create a new instance right before use to ensure correct API key
+      // Corrected model to 'gemini-2.5-flash' as Google Maps grounding is only supported on Gemini 2.5 series
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -258,7 +260,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-2xl mx-auto px-4 mt-8">
         <nav className="flex items-stretch bg-white rounded-[2.5rem] shadow-2xl p-1.5 mb-10 border border-slate-100 sticky top-6 z-[80] backdrop-blur-xl bg-white/80 overflow-x-auto no-scrollbar">
           {[
-            { id: 'info', icon: Info, label: 'Info' },
+            { id: 'info', icon: Info, label: 'Guía' },
             { id: 'explora', icon: Waves, label: 'Explora' },
             { id: 'travel', icon: Globe, label: 'Turismo' },
             { id: 'aliados', icon: Utensils, label: 'Locales', hidden: !content.aliadosVisible && !isAdmin },
@@ -308,7 +310,7 @@ export default function App() {
                 {isAdmin && (
                   <button 
                     onClick={() => handleAdminAction(async () => { 
-                      await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', type: 'activity', timestamp: serverTimestamp() }); 
+                      await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', price: '0.00', type: 'activity', timestamp: serverTimestamp() }); 
                     })} 
                     className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl hover:scale-110 active:scale-90 transition-all"
                   >
@@ -333,7 +335,7 @@ export default function App() {
                 {isAdmin && (
                   <button 
                     onClick={() => handleAdminAction(async () => { 
-                      await addDoc(collection(db, 'activities'), { title: 'Nuevo Servicio', description: '...', image: '', type: 'service', timestamp: serverTimestamp() }); 
+                      await addDoc(collection(db, 'activities'), { title: 'Nuevo Servicio', description: '...', image: '', price: '0.00', type: 'service', timestamp: serverTimestamp() }); 
                     })} 
                     className="bg-amber-500 text-white p-3 rounded-2xl shadow-xl hover:scale-110 active:scale-90 transition-all"
                   >
@@ -702,7 +704,22 @@ function ActivityCard({ activity, isAdmin }: ActivityCardProps) {
             <Trash2 size={18}/>
           </button>
         )}
-        <div className="mb-2">
+        
+        {/* Precio Tag / Editable */}
+        <div className="absolute top-6 right-16 sm:right-6 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
+          <Tag size={12}/>
+          <div className="flex items-center">
+            <span className="text-[10px] font-black mr-0.5">$</span>
+            <EditableText 
+              isAdmin={isAdmin} 
+              text={activity.price || '0.00'} 
+              onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { price: val }); })} 
+              className="text-[10px] font-black tracking-tight" 
+            />
+          </div>
+        </div>
+
+        <div className="mb-2 mt-4 sm:mt-0">
           <EditableText 
             isAdmin={isAdmin} 
             text={activity.title} 
