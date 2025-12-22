@@ -1,19 +1,17 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Info, Map as MapIcon, Globe, MessageSquare, ShieldCheck, 
   Ban, CheckCircle2, Car, Waves, Trash2, Utensils, 
   Eye, EyeOff, Send, Plus, Trash, ShoppingBag,
-  MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw,
-  Wallet, Phone, Calendar, ShoppingCart, X, CreditCard, DollarSign,
-  Settings, Heart, Share2, Sparkles, Briefcase, Tag, ArrowRight, Navigation,
-  Languages, ClipboardList, Zap
+  MapPin, ExternalLink, Loader2, User, RefreshCw,
+  Calendar, ShoppingCart, X, Sparkles, Briefcase, Tag, 
+  ArrowRight, Navigation, Languages, ClipboardList, Wand2, AlertTriangle
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { SiteContent, Activity, Ally, Feedback, AllyItem, Reservation } from './types';
+import { SiteContent, Activity, Ally, Feedback, Reservation } from './types';
 import { GoogleGenAI, Type } from "@google/genai";
 import { translations } from './translations';
 
@@ -37,24 +35,26 @@ const INITIAL_CONTENT: SiteContent = {
   tiendaVisible: true,
   ecuadorTravelPromo: {
     title: 'Ecuador Travel',
-    description: 'Nuestra red social dedicada a compartir la magia de Manabí. ¡Únete a la comunidad!',
+    description: 'Nuestra red social dedicada a compartir la magia de Manabí.',
     image: '',
     link: 'https://socialmanabitravel.vercel.app/'
   },
   tiendaPromo: {
     title: 'Arte Del Mar',
-    description: 'Tienda Online de artesanías únicas. Apoya al talento local de nuestra comunidad.',
+    description: 'Tienda Online de artesanías únicas.',
     image: '',
     link: 'https://arte-del-mar.web.app/'
   }
 };
 
 interface ActivityCardProps {
+  // Fix: Explicitly include key in props interface to satisfy strict JSX prop checking if needed
+  key?: React.Key;
   activity: Activity;
   isAdmin: boolean;
   t: any;
   onClick?: () => void;
-  key?: React.Key;
+  isAiReady: boolean;
 }
 
 export default function App() {
@@ -69,10 +69,8 @@ export default function App() {
   const [feedbacks, setFeedbacks] = useState<(Feedback & { id: string })[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   
-  // State for AI-translated dynamic content
   const [translatedContent, setTranslatedContent] = useState<SiteContent | null>(null);
   const [translatedActivities, setTranslatedActivities] = useState<Activity[]>([]);
-  const [translatedAllies, setTranslatedAllies] = useState<Ally[]>([]);
   const [isTranslating, setIsTranslating] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -91,100 +89,65 @@ export default function App() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // La constante isAiReady verifica si la llave está presente en el entorno
+  const isAiReady = useMemo(() => {
+    return !!process.env.API_KEY && process.env.API_KEY !== 'undefined';
+  }, []);
+
   useEffect(() => {
     localStorage.setItem('app_lang', language);
-    if (language === 'en' && !isAdmin) {
+    if (language === 'en' && !isAdmin && isAiReady) {
       translateDynamicData();
     } else {
       setTranslatedContent(null);
       setTranslatedActivities([]);
-      setTranslatedAllies([]);
     }
-  }, [language, isAdmin]);
-
-  // Translate dynamic data when Firebase source changes
-  useEffect(() => {
-    if (language === 'en' && !isAdmin && !isLoading) {
-      translateDynamicData();
-    }
-  }, [content, activities, allies]);
+  }, [language, isAdmin, isAiReady]);
 
   const translateDynamicData = async () => {
-    if (isTranslating) return;
+    if (isTranslating || !isAiReady) return;
     setIsTranslating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      // We translate in one batch to maintain context and save tokens
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       const sourceData = {
         content,
-        activities: activities.map(a => ({ id: a.id, title: a.title, description: a.description })),
-        allies: allies.map(a => ({ id: a.id, name: a.name, description: a.description, address: a.address }))
+        activities: activities.slice(0, 5).map(a => ({ 
+          id: a.id, title: a.title, description: a.description 
+        }))
       };
 
-      const prompt = `
-        Translate the following tourism application data from Spanish to English. 
-        It's for Playa Los Frailes, Machalilla National Park.
-        Keep the tone professional and inviting.
-        Keep the structure exactly as provided.
-        Return ONLY the translated JSON object.
-        Data: ${JSON.stringify(sourceData)}
-      `;
+      const prompt = `Translate this tourism app content to English. Return ONLY JSON. Context: Los Frailes Beach, Ecuador. Data: ${JSON.stringify(sourceData)}`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: 'gemini-3-flash-preview',
         contents: prompt,
         config: { responseMimeType: "application/json" }
       });
 
       const result = JSON.parse(response.text || "{}");
-      
-      if (result.content) {
-        setTranslatedContent({ ...content, ...result.content });
-      }
+      if (result.content) setTranslatedContent({ ...content, ...result.content });
       if (result.activities) {
-        const translated = activities.map(original => {
+        setTranslatedActivities(activities.map(original => {
           const trans = result.activities.find((a: any) => a.id === original.id);
           return trans ? { ...original, ...trans } : original;
-        });
-        setTranslatedActivities(translated);
-      }
-      if (result.allies) {
-        const translated = allies.map(original => {
-          const trans = result.allies.find((a: any) => a.id === original.id);
-          return trans ? { ...original, ...trans } : original;
-        });
-        setTranslatedAllies(translated);
+        }));
       }
     } catch (e) {
-      console.error("Translation Error:", e);
+      console.error("AI Translation Error:", e);
     } finally {
       setIsTranslating(false);
     }
   };
 
-  // Computed data based on language and translation availability
-  const displayContent = useMemo(() => {
-    return (language === 'en' && translatedContent) ? translatedContent : content;
-  }, [language, translatedContent, content]);
-
-  const displayActivities = useMemo(() => {
-    return (language === 'en' && translatedActivities.length > 0) ? translatedActivities : activities;
-  }, [language, translatedActivities, activities]);
-
-  const displayAllies = useMemo(() => {
-    return (language === 'en' && translatedAllies.length > 0) ? translatedAllies : allies;
-  }, [language, translatedAllies, allies]);
+  const displayContent = useMemo(() => (language === 'en' && translatedContent) ? translatedContent : content, [language, translatedContent, content]);
+  const displayActivities = useMemo(() => (language === 'en' && translatedActivities.length > 0) ? translatedActivities : activities, [language, translatedActivities, activities]);
 
   useEffect(() => {
     const unsubContent = onSnapshot(doc(db, 'content', 'main'), (snap) => {
-      if (snap.exists()) {
-        setContent(prev => ({ ...prev, ...snap.data() as SiteContent }));
-      } else {
-        setDoc(doc(db, 'content', 'main'), INITIAL_CONTENT);
-      }
+      if (snap.exists()) setContent(prev => ({ ...prev, ...snap.data() as SiteContent }));
+      else setDoc(doc(db, 'content', 'main'), INITIAL_CONTENT);
       setIsLoading(false);
-    }, () => setIsLoading(false));
+    });
 
     const unsubActivities = onSnapshot(query(collection(db, 'activities'), orderBy('timestamp', 'desc')), (snap) => {
       setActivities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Activity)));
@@ -202,147 +165,62 @@ export default function App() {
       setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)));
     });
 
-    return () => { 
-      unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks(); unsubReservations();
-    };
+    return () => { unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks(); unsubReservations(); };
   }, []);
 
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'es' ? 'en' : 'es');
-  };
+  const toggleLanguage = () => setLanguage(prev => prev === 'es' ? 'en' : 'es');
 
   const handleAdminAction = async (action: () => Promise<void>) => {
     if (!isAdmin) return;
-    try {
-      await action();
-    } catch (error) {
-      console.error("Firebase Error:", error);
-    }
-  };
-
-  const toggleSectionVisibility = async (section: 'aliadosVisible' | 'tiendaVisible') => {
-    await updateDoc(doc(db, 'content', 'main'), { [section]: !content[section] });
-  };
-
-  const updatePromo = async (key: 'ecuadorTravelPromo' | 'tiendaPromo', updates: any) => {
-    await updateDoc(doc(db, 'content', 'main'), {
-      [key]: { ...content[key], ...updates }
-    });
-  };
-
-  const addAllyItem = async (allyId: string) => {
-    const ally = allies.find(a => a.id === allyId);
-    if (!ally) return;
-    const newItem: AllyItem = {
-      id: Date.now().toString(),
-      name: 'Nuevo Item',
-      price: '0.00',
-      description: '...',
-      image: ''
-    };
-    const updatedItems = [...(ally.items || []), newItem];
-    await handleAdminAction(async () => {
-      await updateDoc(doc(db, 'allies', allyId), { items: updatedItems });
-    });
-  };
-
-  const updateAllyItem = async (allyId: string, itemId: string, updates: Partial<AllyItem>) => {
-    const ally = allies.find(a => a.id === allyId);
-    if (!ally) return;
-    const updatedItems = (ally.items || []).map(item => 
-      item.id === itemId ? { ...item, ...updates } : item
-    );
-    await handleAdminAction(async () => {
-      await updateDoc(doc(db, 'allies', allyId), { items: updatedItems });
-    });
-  };
-
-  const removeAllyItem = async (allyId: string, itemId: string) => {
-    if (!confirm(t.common.delete)) return;
-    const ally = allies.find(a => a.id === allyId);
-    if (!ally) return;
-    const updatedItems = (ally.items || []).filter(item => item.id !== itemId);
-    await handleAdminAction(async () => {
-      await updateDoc(doc(db, 'allies', allyId), { items: updatedItems });
-    });
+    try { await action(); } catch (error) { console.error("Firebase Error:", error); }
   };
 
   const getDirections = async (ally: Ally) => {
+    if (!isAiReady) {
+      window.open(`https://www.google.com/maps/search/${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`, '_blank');
+      return;
+    }
     setLoadingMap(ally.id);
-    let latLng = undefined;
-    
+    let latLng = { latitude: -1.5544, longitude: -80.8206 };
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 4000 });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
       });
-      latLng = {
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude
-      };
-    } catch (e) {
-      console.warn("Geolocation fallback.");
-    }
+      latLng = { latitude: position.coords.latitude, longitude: position.coords.longitude };
+    } catch (e) { console.warn("Geo fallback"); }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = language === 'es' 
-        ? `Instrucciones detalladas de cómo llegar a ${ally.name} ubicado en ${ally.address || 'Puerto López, Manabí'}.`
-        : `Detailed instructions on how to get to ${ally.name} located at ${ally.address || 'Puerto Lopez, Manabi'}.`;
-
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+      const prompt = `Instrucciones detalladas de cómo llegar a ${ally.name} en Manabí. Idioma: ${language === 'es' ? 'Español' : 'Inglés'}`;
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: 'gemini-2.5-flash',
         contents: prompt,
-        config: { 
-          tools: [{ googleMaps: {} }],
-          toolConfig: {
-            retrievalConfig: {
-              latLng: latLng || { latitude: -1.5544, longitude: -80.8206 }
-            }
-          }
-        },
+        config: { tools: [{ googleMaps: {} }], toolConfig: { retrievalConfig: { latLng } } },
       });
-      
       const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const mapsLinks = chunks.filter((c: any) => c.maps).map((c: any) => c.maps);
-      
-      const finalLinks = mapsLinks.length > 0 ? mapsLinks : [{
-        uri: `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ally.name + " " + (ally.address || "Puerto López"))}`,
-        title: language === 'es' ? "Abrir ruta en Google Maps" : "Open route in Google Maps"
-      }];
-
-      setMapResults(prev => ({ 
-        ...prev, 
-        [ally.id]: { text: response.text || "...", links: finalLinks } 
-      }));
+      setMapResults(prev => ({ ...prev, [ally.id]: { text: response.text || "Calculando ruta...", links: mapsLinks } }));
     } catch (err) {
-      setMapResults(prev => ({ 
-        ...prev, 
-        [ally.id]: { 
-          text: language === 'es' ? "Ruta generada automáticamente:" : "Automatically generated route:", 
-          links: [{ 
-            uri: `https://www.google.com/maps/search/${encodeURIComponent(ally.name + ' ' + (ally.address || 'Puerto López'))}`, 
-            title: "Google Maps" 
-          }] 
-        } 
-      }));
-    } finally {
-      setLoadingMap(null);
-    }
+      console.error(err);
+      window.open(`https://www.google.com/maps/search/${encodeURIComponent(ally.name)}`, '_blank');
+    } finally { setLoadingMap(null); }
   };
 
+  // Fix: Added missing submitFeedback function to handle user feedback submission
   const submitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newFeedback.name.trim() || !newFeedback.comment.trim()) return;
+    if (!newFeedback.name || !newFeedback.comment) return;
     setFeedbackStatus('sending');
     try {
       await addDoc(collection(db, 'feedbacks'), {
         ...newFeedback,
         timestamp: serverTimestamp()
       });
-      setFeedbackStatus('success');
       setNewFeedback({ name: '', comment: '' });
+      setFeedbackStatus('success');
       setTimeout(() => setFeedbackStatus('idle'), 3000);
-    } catch (err) {
+    } catch (e) {
+      console.error("Feedback Error:", e);
       setFeedbackStatus('idle');
     }
   };
@@ -358,59 +236,32 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F2E8CF] pb-24 font-['Montserrat'] overflow-x-hidden">
-      
-      {/* Dynamic Translation Loading Indicator */}
-      {isTranslating && (
-        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-white/80 backdrop-blur-md px-6 py-2 rounded-full shadow-2xl border border-[#118AB2]/20 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-          <Zap size={14} className="text-[#118AB2] animate-pulse" />
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">AI Translating dynamic content...</span>
-        </div>
-      )}
-
-      <button 
-        onClick={toggleLanguage}
-        className="fixed top-6 right-6 z-[150] w-12 h-12 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center text-slate-900 active:scale-90 transition-all group"
-      >
-        <Languages size={20} className="group-hover:rotate-12 transition-transform"/>
-        <span className="absolute -bottom-1 -right-1 bg-[#118AB2] text-white text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter border-2 border-white shadow-sm">
-          {language}
-        </span>
-      </button>
-
       {isAdmin && (
-        <div className="bg-slate-900 text-white py-3 sticky top-0 z-[100] flex flex-wrap justify-center items-center gap-3 shadow-2xl px-4 border-b border-white/10 backdrop-blur-md">
+        <div className="bg-slate-900 text-white py-3 sticky top-0 z-[150] flex flex-wrap justify-center items-center gap-3 shadow-2xl px-4 border-b border-white/10 backdrop-blur-md">
           <div className="flex items-center gap-2 mr-2 bg-white/10 px-3 py-1.5 rounded-full">
             <ShieldCheck size={14} className="text-emerald-400" />
             <span className="text-[9px] font-black uppercase tracking-widest">{t.admin.mode}</span>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => toggleSectionVisibility('aliadosVisible')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border transition-all ${content.aliadosVisible ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-rose-500/20 border-rose-500 text-rose-400'}`}>
-              {content.aliadosVisible ? <Eye size={12}/> : <EyeOff size={12}/>} {t.admin.locales}
-            </button>
-            <button onClick={() => toggleSectionVisibility('tiendaVisible')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border transition-all ${content.tiendaVisible ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-rose-500/20 border-rose-500 text-rose-400'}`}>
-              {content.tiendaVisible ? <Eye size={12}/> : <EyeOff size={12}/>} {t.admin.tienda}
-            </button>
-            <button onClick={() => setShowReservations(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border border-blue-500 bg-blue-500/20 text-blue-400">
-              <ClipboardList size={12}/> {t.admin.reservations}
-            </button>
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border ${isAiReady ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
+            {isAiReady ? <Sparkles size={12}/> : <AlertTriangle size={12}/>}
+            <span className="text-[8px] font-black uppercase tracking-tighter">{isAiReady ? 'LLAVE OK' : 'FALTA LLAVE'}</span>
           </div>
+          <button onClick={() => setShowReservations(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border border-blue-500 bg-blue-500/20 text-blue-400">
+            <ClipboardList size={12}/> {t.admin.reservations}
+          </button>
           <button onClick={() => setIsAdmin(false)} className="bg-white/10 px-4 py-2 rounded-xl text-[9px] font-black border border-white/20">{t.admin.exit}</button>
         </div>
       )}
 
+      <button onClick={toggleLanguage} className="fixed top-24 right-6 z-[100] w-12 h-12 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center text-slate-900 active:scale-90 transition-all group">
+        <Languages size={20} className="group-hover:rotate-12 transition-transform"/>
+        <span className="absolute -bottom-1 -right-1 bg-[#118AB2] text-white text-[8px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-tighter border-2 border-white shadow-sm">{language}</span>
+      </button>
+
       <header className="relative h-[48vh] md:h-[58vh] w-full shadow-2xl overflow-hidden bg-slate-200">
         <EditableImage isAdmin={isAdmin} src={displayContent.heroImage} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroImage: url }); })} className="w-full h-full" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8 sm:p-14 pointer-events-none">
-          <div 
-            onClick={() => {
-              if (isAdmin) return;
-              setClickCount(c => c + 1);
-              if (clickTimer.current) clearTimeout(clickTimer.current);
-              clickTimer.current = setTimeout(() => setClickCount(0), 1500);
-              if (clickCount + 1 >= 5) setShowAdminLogin(true);
-            }} 
-            className="max-w-2xl cursor-pointer active:scale-[0.99] transition-transform pointer-events-auto"
-          >
+          <div onClick={() => { if (isAdmin) return; setClickCount(c => c + 1); if (clickTimer.current) clearTimeout(clickTimer.current); clickTimer.current = setTimeout(() => setClickCount(0), 1500); if (clickCount + 1 >= 5) setShowAdminLogin(true); }} className="max-w-2xl cursor-pointer active:scale-[0.99] transition-transform pointer-events-auto">
             <EditableText isAdmin={isAdmin} text={displayContent.heroTitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroTitle: val }); })} className="text-4xl sm:text-6xl font-black text-white mb-2 drop-shadow-2xl" />
           </div>
           <div className="pointer-events-auto">
@@ -428,11 +279,7 @@ export default function App() {
             { id: 'aliados', icon: Utensils, label: t.nav.aliados, hidden: !content.aliadosVisible && !isAdmin },
             { id: 'feedback', icon: MessageSquare, label: t.nav.feedback }
           ].filter(t => !t.hidden).map((tab) => (
-            <button 
-              key={tab.id} 
-              onClick={() => setActiveTab(tab.id as any)} 
-              className={`flex-1 min-w-[70px] flex flex-col items-center justify-center py-4 rounded-[2rem] transition-all duration-300 ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-xl scale-100' : 'text-slate-400 hover:text-slate-600 scale-95 opacity-80'}`}
-            >
+            <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex-1 min-w-[70px] flex flex-col items-center justify-center py-4 rounded-[2rem] transition-all duration-300 ${activeTab === tab.id ? 'bg-[#118AB2] text-white shadow-xl scale-100' : 'text-slate-400 hover:text-slate-600 scale-95 opacity-80'}`}>
               <tab.icon size={20} />
               <span className="text-[9px] mt-1.5 font-black uppercase tracking-widest">{tab.label}</span>
             </button>
@@ -441,8 +288,7 @@ export default function App() {
 
         {activeTab === 'info' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <TabView
-              tabs={[
+            <TabView tabs={[
                 { id: 'normativas', label: t.tabs.normativas, content: (
                   <div className="space-y-6">
                     <ListEditor items={displayContent.normativasPermitido} field="normativasPermitido" title={t.info.allowed} icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-200 text-emerald-800" isAdmin={isAdmin} content={displayContent} />
@@ -455,8 +301,7 @@ export default function App() {
                 { id: 'seguridad', label: t.tabs.seguridad, content: (
                   <ListEditor items={displayContent.seguridadItems} field="seguridadItems" title={t.info.safety} icon={ShieldCheck} colorClass="bg-white border-slate-200 text-blue-700" isAdmin={isAdmin} content={displayContent} />
                 )}
-              ]}
-            />
+            ]} />
           </div>
         )}
 
@@ -469,86 +314,15 @@ export default function App() {
                   <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.activities}</h2>
                 </div>
                 {isAdmin && (
-                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'New Activity', description: '...', image: '', price: '0.00', type: 'activity', timestamp: serverTimestamp() }); })} className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
+                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', price: '0.00', type: 'activity', timestamp: serverTimestamp() }); })} className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
                 )}
               </div>
               <div className="grid gap-8">
-                {displayActivities.filter(a => a.type === 'activity').map(activity => (
-                  <ActivityCard 
-                    key={activity.id} 
-                    activity={activity} 
-                    isAdmin={isAdmin} 
-                    t={t} 
-                    onClick={() => !isAdmin && setSelectedActivity(activity)}
-                  />
+                {displayActivities.map(activity => (
+                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(activity)} isAiReady={isAiReady} />
                 ))}
               </div>
             </section>
-
-            <section>
-              <div className="flex justify-between items-center mb-8 px-2">
-                <div className="flex items-center gap-3">
-                  <Briefcase className="text-amber-500" size={28} />
-                  <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.services}</h2>
-                </div>
-                {isAdmin && (
-                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'New Service', description: '...', image: '', price: '0.00', type: 'service', timestamp: serverTimestamp() }); })} className="bg-amber-500 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
-                )}
-              </div>
-              <div className="grid gap-8">
-                {displayActivities.filter(a => a.type === 'service').map(service => (
-                  <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} />
-                ))}
-                {displayActivities.filter(a => a.type === 'service').length === 0 && (
-                  <p className="text-center py-10 bg-white/40 rounded-[2.5rem] border-2 border-dashed border-white/60 text-[10px] font-black uppercase tracking-widest text-slate-400">{t.explora.comingSoon}</p>
-                )}
-              </div>
-            </section>
-          </div>
-        )}
-
-        {activeTab === 'travel' && (
-          <div className="space-y-12 animate-in fade-in py-4">
-            <div className="text-center mb-10">
-              <h2 className="text-4xl font-black text-slate-900 leading-tight mb-2 uppercase tracking-tighter">{t.travel.title}</h2>
-              <p className="text-[#118AB2] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-2">
-                <Sparkles size={12}/> {t.travel.subtitle}
-              </p>
-            </div>
-
-            <div className="bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative">
-               <div className="h-[300px] relative">
-                 <EditableImage isAdmin={isAdmin} src={displayContent.ecuadorTravelPromo.image} onSave={(url) => updatePromo('ecuadorTravelPromo', { image: url })} className="w-full h-full" alt="Ecuador Travel" />
-                 <div className="absolute top-8 left-8 bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex items-center gap-2 backdrop-blur-md bg-blue-600/90">
-                   <Share2 size={14}/> {t.travel.socialLabel}
-                 </div>
-               </div>
-               <div className="p-12 text-center">
-                  <EditableText isAdmin={isAdmin} text={displayContent.ecuadorTravelPromo.title} onSave={(val) => updatePromo('ecuadorTravelPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
-                  <EditableText isAdmin={isAdmin} text={displayContent.ecuadorTravelPromo.description} onSave={(val) => updatePromo('ecuadorTravelPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
-                  <a href={displayContent.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-blue-600 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-blue-500/30">
-                    {t.travel.enterSocial} <ExternalLink size={18}/>
-                  </a>
-               </div>
-            </div>
-
-            {(content.tiendaVisible || isAdmin) && (
-              <div className={`bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative transition-all duration-500 ${!content.tiendaVisible && isAdmin ? 'opacity-60 grayscale scale-95' : ''}`}>
-                 <div className="h-[300px] relative">
-                   <EditableImage isAdmin={isAdmin} src={displayContent.tiendaPromo.image} onSave={(url) => updatePromo('tiendaPromo', { image: url })} className="w-full h-full" alt="Arte Del Mar" />
-                   <div className="absolute top-8 right-8 bg-amber-500 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex items-center gap-2 backdrop-blur-md bg-amber-500/90">
-                     <ShoppingBag size={14}/> {t.travel.storeLabel}
-                   </div>
-                 </div>
-                 <div className="p-12 text-center">
-                    <EditableText isAdmin={isAdmin} text={displayContent.tiendaPromo.title} onSave={(val) => updatePromo('tiendaPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
-                    <EditableText isAdmin={isAdmin} text={displayContent.tiendaPromo.description} onSave={(val) => updatePromo('tiendaPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
-                    <a href={displayContent.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-amber-500 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-amber-500/30">
-                      {t.travel.goStore} <ShoppingCart size={18}/>
-                    </a>
-                 </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -557,108 +331,33 @@ export default function App() {
              <div className="flex justify-between items-end mb-8 px-2">
                <h2 className="text-4xl font-black text-slate-900 leading-none">{t.locales.title}</h2>
                {isAdmin && (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'allies'), { name: 'Hotel', type: 'hospedaje', description: '...', address: '', image: '', timestamp: serverTimestamp() }); })} className="bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg font-black text-[9px] uppercase tracking-tighter flex items-center gap-1"><Plus size={14}/> {t.locales.hotel}</button>
-                    <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'allies'), { name: 'Restaurant', type: 'restaurante', description: '...', address: '', image: '', timestamp: serverTimestamp() }); })} className="bg-emerald-500 text-white px-4 py-2 rounded-xl shadow-lg font-black text-[9px] uppercase tracking-tighter flex items-center gap-1"><Plus size={14}/> {t.locales.restaurant}</button>
-                  </div>
+                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'allies'), { name: 'Nuevo Local', type: 'restaurante', description: '...', address: '', image: '', timestamp: serverTimestamp() }); })} className="bg-emerald-500 text-white px-4 py-2 rounded-xl shadow-lg font-black text-[9px] uppercase tracking-tighter flex items-center gap-1"><Plus size={14}/> {t.locales.add}</button>
                )}
              </div>
              <div className="grid gap-12">
-               {displayAllies.map(ally => (
+               {allies.map(ally => (
                  <div key={ally.id} className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-white">
                     <div className="h-64 relative bg-slate-100">
                       <EditableImage isAdmin={isAdmin} src={ally.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { image: url }); })} className="w-full h-full" />
-                      <div className={`absolute top-6 left-6 px-4 py-1.5 rounded-full text-white text-[9px] font-black uppercase tracking-widest shadow-xl backdrop-blur-md ${ally.type === 'restaurante' ? 'bg-emerald-500/80' : 'bg-amber-500/80'}`}>
-                        {ally.type === 'restaurante' ? t.locales.restaurant : t.locales.hotel}
-                      </div>
                     </div>
-                    
                     <div className="p-8">
                       <div className="flex justify-between items-start mb-4">
-                        <div className="flex-1">
-                          <EditableText isAdmin={isAdmin} text={ally.name} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { name: val }); })} className="text-3xl font-black text-slate-900 mb-1 leading-none" />
-                          <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-widest mt-2">
-                            <MapPin size={12} className="text-[#118AB2]"/> <EditableText isAdmin={isAdmin} text={ally.address || '...'} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { address: val }); })} />
-                          </div>
-                        </div>
+                        <EditableText isAdmin={isAdmin} text={ally.name} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { name: val }); })} className="text-3xl font-black text-slate-900 mb-1 leading-none" />
                         {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm(t.common.delete)) await deleteDoc(doc(db, 'allies', ally.id)); })} className="text-rose-300 hover:text-rose-500 p-2"><Trash size={20}/></button>}
                       </div>
-
-                      <EditableText isAdmin={isAdmin} text={ally.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed mb-6" multiline />
-                      
                       <div className="grid grid-cols-2 gap-4 mb-4">
-                        <button onClick={() => setSelectedAllyForBooking(ally)} className="py-4 rounded-[1.5rem] bg-[#118AB2] text-white font-black text-[10px] tracking-widest uppercase flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
-                          <Calendar size={16}/> {t.locales.reserve}
-                        </button>
-                        <button onClick={() => getDirections(ally)} disabled={!!loadingMap} className="py-4 rounded-[1.5rem] bg-slate-900 text-white font-black text-[10px] tracking-widest uppercase flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all disabled:bg-slate-300">
+                        <button onClick={() => setSelectedAllyForBooking(ally)} className="py-4 rounded-[1.5rem] bg-[#118AB2] text-white font-black text-[10px] tracking-widest uppercase flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"><Calendar size={16}/> {t.locales.reserve}</button>
+                        <button onClick={() => getDirections(ally)} disabled={!!loadingMap} className="py-4 rounded-[1.5rem] bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all">
                           {loadingMap === ally.id ? <Loader2 className="animate-spin" size={16}/> : <MapIcon size={16}/>} {t.locales.directions}
                         </button>
                       </div>
-
-                      {mapResults[ally.id] && !loadingMap && (
-                        <div className="mt-6 p-6 bg-blue-50 rounded-3xl border border-blue-100 animate-in zoom-in-95 shadow-lg border-l-4 border-l-blue-600">
-                          <div className="flex items-center gap-3 mb-4">
-                             <div className="bg-blue-600 text-white p-2.5 rounded-xl shadow-lg shadow-blue-600/20"><Navigation size={18}/></div>
-                             <h4 className="text-[11px] font-black uppercase tracking-widest text-blue-900">{t.locales.routeGuide}</h4>
-                          </div>
-                          <p className="text-[12px] font-bold text-slate-700 leading-relaxed mb-6 bg-white/40 p-4 rounded-2xl">{mapResults[ally.id].text}</p>
-                          <div className="grid gap-3">
-                            {mapResults[ally.id].links.length > 0 ? mapResults[ally.id].links.map((link, i) => (
-                              <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center justify-between bg-white p-5 rounded-[1.5rem] shadow-sm text-blue-600 hover:bg-blue-600 hover:text-white group border border-blue-100">
-                                <div className="flex items-center gap-3"><MapIcon size={16}/><span className="text-[10px] font-black uppercase tracking-widest">{link.title || "Maps"}</span></div>
-                                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform"/>
-                              </a>
-                            )) : (
-                              <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(ally.name)}`} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 bg-slate-900 text-white p-5 rounded-[1.5rem] shadow-xl text-[10px] font-black uppercase tracking-widest">{t.locales.searchDirect} <ExternalLink size={16}/></a>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {isAdmin && (
-                        <div className="mt-8 p-6 bg-slate-50 rounded-[2.5rem] border border-slate-200">
-                          <div className="flex justify-between items-center mb-6">
-                            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 flex items-center gap-2"><ShoppingCart size={14}/> {ally.type === 'restaurante' ? t.locales.menu : t.locales.rooms}</h4>
-                            <button onClick={() => addAllyItem(ally.id)} className="bg-[#118AB2] text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-md active:scale-90"><Plus size={12}/> {t.locales.add}</button>
-                          </div>
-                          <div className="space-y-4">
-                            {(ally.items || []).map(item => (
-                              <div key={item.id} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative group">
-                                <div className="flex gap-4">
-                                  <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100">
-                                    <EditableImage isAdmin={isAdmin} src={item.image} onSave={(url) => updateAllyItem(ally.id, item.id, { image: url })} className="w-full h-full" />
-                                  </div>
-                                  <div className="flex-1 space-y-1">
-                                    <div className="flex items-center gap-2">
-                                      <EditableText isAdmin={isAdmin} text={item.name} onSave={(val) => updateAllyItem(ally.id, item.id, { name: val })} className="text-sm font-black text-slate-900" />
-                                      <div className="flex items-center bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-md border border-emerald-100">
-                                        <DollarSign size={10}/><EditableText isAdmin={isAdmin} text={item.price} onSave={(val) => updateAllyItem(ally.id, item.id, { price: val })} className="text-[10px] font-black" />
-                                      </div>
-                                    </div>
-                                    <EditableText isAdmin={isAdmin} text={item.description} onSave={(val) => updateAllyItem(ally.id, item.id, { description: val })} className="text-[10px] text-slate-500 font-medium" multiline />
-                                  </div>
-                                  <button onClick={() => removeAllyItem(ally.id, item.id)} className="text-rose-300 hover:text-rose-500 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
-                                </div>
-                              </div>
+                      {mapResults[ally.id] && (
+                         <div className="mt-6 p-6 bg-blue-50 rounded-3xl border border-blue-100 animate-in zoom-in-95">
+                            <p className="text-[12px] font-bold text-slate-700 leading-relaxed mb-4">{mapResults[ally.id].text}</p>
+                            {mapResults[ally.id].links.map((link, i) => (
+                              <a key={i} href={link.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-blue-600 text-[10px] font-black uppercase"><MapIcon size={14}/> {link.title || "Maps"}</a>
                             ))}
-                          </div>
-                          <div className="mt-6 pt-6 border-t border-slate-200 space-y-4">
-                            <div className="flex items-center gap-3">
-                              <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600"><Phone size={14}/></div>
-                              <div className="flex-1">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block">{t.locales.whatsapp}</label>
-                                <EditableText isAdmin={isAdmin} text={ally.whatsapp || '...'} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { whatsapp: val }); })} className="text-[10px] font-black" />
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <div className="bg-amber-100 p-2 rounded-lg text-amber-600"><Wallet size={14}/></div>
-                              <div className="flex-1">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block">{t.locales.bank}</label>
-                                <EditableText isAdmin={isAdmin} text={ally.bankDetails || '...'} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { bankDetails: val }); })} className="text-[10px] font-black" multiline />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                         </div>
                       )}
                     </div>
                  </div>
@@ -670,9 +369,7 @@ export default function App() {
         {activeTab === 'feedback' && (
           <div className="animate-in fade-in zoom-in-95 py-4">
              <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-white">
-               <h2 className="text-3xl font-black text-slate-900 mb-8 text-center flex items-center justify-center gap-3">
-                 <MessageSquare className="text-[#118AB2]" size={32} /> {t.feedback.title}
-               </h2>
+               <h2 className="text-3xl font-black text-slate-900 mb-8 text-center flex items-center justify-center gap-3"><MessageSquare className="text-[#118AB2]" size={32} /> {t.feedback.title}</h2>
                <form onSubmit={submitFeedback} className="space-y-6 mb-12">
                  <input type="text" value={newFeedback.name} onChange={(e) => setNewFeedback(p => ({ ...p, name: e.target.value }))} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-[1.5rem] p-5 font-bold outline-none transition-all shadow-inner" placeholder={t.feedback.name} required />
                  <textarea value={newFeedback.comment} onChange={(e) => setNewFeedback(p => ({ ...p, comment: e.target.value }))} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#118AB2] rounded-[1.5rem] p-5 font-bold outline-none transition-all min-h-[140px] shadow-inner" placeholder={t.feedback.message} required />
@@ -684,15 +381,8 @@ export default function App() {
                <div className="space-y-6">
                  {feedbacks.map(f => (
                    <div key={f.id} className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 relative group transition-all hover:bg-white">
-                     <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                           <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center text-[#118AB2] shadow-sm"><User size={16}/></div>
-                           <span className="font-black text-slate-900 text-[13px]">{f.name}</span>
-                        </div>
-                        <span className="text-slate-300 text-[10px] font-bold">{f.timestamp?.toDate ? f.timestamp.toDate().toLocaleDateString(language === 'es' ? 'es-EC' : 'en-US') : t.feedback.dateNow}</span>
-                     </div>
-                     <p className="text-slate-600 font-semibold text-sm italic leading-relaxed">"{f.comment}"</p>
-                     {isAdmin && <button onClick={() => handleAdminAction(async () => { if(confirm(t.common.delete)) await deleteDoc(doc(db, 'feedbacks', f.id)); })} className="absolute top-4 right-4 text-rose-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash size={14}/></button>}
+                     <span className="font-black text-slate-900 text-[13px]">{f.name}</span>
+                     <p className="text-slate-600 font-semibold text-sm italic leading-relaxed mt-1">"{f.comment}"</p>
                    </div>
                  ))}
                </div>
@@ -701,72 +391,8 @@ export default function App() {
         )}
       </main>
 
-      {selectedAllyForBooking && (
-        <ReservationModal ally={selectedAllyForBooking} onClose={() => setSelectedAllyForBooking(null)} language={language} />
-      )}
-
-      {selectedActivity && (
-        <ActivityDetailsModal 
-          activity={selectedActivity} 
-          onClose={() => setSelectedActivity(null)} 
-          language={language} 
-          t={t}
-        />
-      )}
-
-      {/* Modal de Reservas para Administrador */}
-      {showReservations && isAdmin && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4 animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl h-[85vh] rounded-[3rem] p-8 sm:p-12 flex flex-col shadow-2xl relative overflow-hidden">
-             <button onClick={() => setShowReservations(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all">
-               <X size={24}/>
-             </button>
-             
-             <div className="flex items-center gap-4 mb-10">
-               <div className="p-4 bg-blue-500 text-white rounded-[1.5rem] shadow-xl shadow-blue-500/20">
-                 <ClipboardList size={32}/>
-               </div>
-               <div>
-                 <h2 className="text-2xl font-black text-slate-900 leading-none">{t.admin.reservations}</h2>
-                 <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Historial de solicitudes</p>
-               </div>
-             </div>
-
-             <div className="flex-1 overflow-y-auto pr-2 no-scrollbar space-y-4">
-                {reservations.map(res => (
-                  <div key={res.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-1">{res.allyName}</span>
-                        <h4 className="text-lg font-black text-slate-900">{res.customerName}</h4>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[10px] font-black text-slate-400 uppercase block">{res.date}</span>
-                        <span className="text-lg font-black text-emerald-600">$ {res.total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                       {res.items.map((item, i) => (
-                         <span key={i} className="text-[9px] font-bold bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-600">
-                           {item}
-                         </span>
-                       ))}
-                    </div>
-                    <button onClick={() => deleteDoc(doc(db, 'reservations', res.id))} className="absolute bottom-6 right-6 p-2 text-rose-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all">
-                       <Trash size={18}/>
-                    </button>
-                  </div>
-                ))}
-                {reservations.length === 0 && (
-                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
-                    <ShoppingCart size={64} className="mb-4 text-slate-300"/>
-                    <p className="font-black uppercase tracking-widest text-xs">{t.common.noReservations}</p>
-                  </div>
-                )}
-             </div>
-          </div>
-        </div>
-      )}
+      {selectedAllyForBooking && <ReservationModal ally={selectedAllyForBooking} onClose={() => setSelectedAllyForBooking(null)} language={language} />}
+      {selectedActivity && <ActivityDetailsModal activity={selectedActivity} onClose={() => setSelectedActivity(null)} language={language} t={t} isAdmin={isAdmin} onUpdate={(updates) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', selectedActivity.id), updates); })} />}
 
       {showAdminLogin && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[200] flex items-center justify-center p-6 animate-in fade-in">
@@ -774,10 +400,7 @@ export default function App() {
             <h2 className="text-2xl font-black text-slate-900 mb-6 text-center">{t.admin.access}</h2>
             <form onSubmit={(e) => { e.preventDefault(); if (adminPassword === '1996') { setIsAdmin(true); setShowAdminLogin(false); setAdminPassword(''); } else alert("Error"); }} className="space-y-6">
               <input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} className="w-full bg-slate-50 border-2 border-slate-100 focus:border-[#118AB2] rounded-[1.5rem] p-5 outline-none text-center text-5xl font-black tracking-widest" placeholder="****" autoFocus />
-              <div className="flex gap-4">
-                <button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-black text-slate-400 py-4 uppercase text-[10px] tracking-widest">{t.admin.close}</button>
-                <button type="submit" className="flex-1 bg-slate-950 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#118AB2] shadow-xl transition-all">{t.admin.enter}</button>
-              </div>
+              <div className="flex gap-4"><button type="button" onClick={() => setShowAdminLogin(false)} className="flex-1 font-black text-slate-400 py-4 uppercase text-[10px] tracking-widest">{t.admin.close}</button><button type="submit" className="flex-1 bg-slate-950 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-[#118AB2] shadow-xl transition-all">{t.admin.enter}</button></div>
             </form>
           </div>
         </div>
@@ -786,45 +409,67 @@ export default function App() {
   );
 }
 
-/**
- * ActivityCard component for displaying individual activities.
- */
-function ActivityCard({ activity, isAdmin, t, onClick }: ActivityCardProps) {
-  const handleAdminAction = async (action: () => Promise<void>) => {
-    if (!isAdmin) return;
+function ActivityCard({ activity, isAdmin, t, onClick, isAiReady }: ActivityCardProps) {
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  const generateAIContent = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isAiReady) return alert("No se detectó la clave de API. Agrégala en Vercel.");
+    if (!activity.title || activity.title.includes('...')) return alert("Ingresa un nombre real para la actividad primero.");
+    
+    setIsGenerating(true);
     try {
-      await action();
-    } catch (error) {
-      console.error("Firebase Error:", error);
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+      const prompt = `Actúa como un guía de Playa Los Frailes. Genera información para: "${activity.title}". JSON con: description (max 15 palabras), extendedDescription (3 párrafos), whatToBring (array 5), bestTime (texto), safetyTips (array 4).`;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              description: { type: Type.STRING },
+              extendedDescription: { type: Type.STRING },
+              whatToBring: { type: Type.ARRAY, items: { type: Type.STRING } },
+              bestTime: { type: Type.STRING },
+              safetyTips: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["description", "extendedDescription", "whatToBring", "bestTime", "safetyTips"]
+          }
+        },
+      });
+
+      const result = JSON.parse(response.text || "{}");
+      await updateDoc(doc(db, 'activities', activity.id), { ...result, timestamp: serverTimestamp() });
+    } catch (err) {
+      console.error(err);
+      alert("Error al conectar con la IA.");
+    } finally {
+      setIsGenerating(false);
     }
   };
 
   return (
-    <div 
-      onClick={onClick}
-      className={`bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card ${!isAdmin && activity.type === 'activity' ? 'cursor-pointer' : ''}`}
-    >
+    <div onClick={onClick} className={`bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card ${!isAdmin ? 'cursor-pointer' : ''}`}>
       <div className="w-full sm:w-56 h-56 relative bg-slate-100 flex-shrink-0">
-        <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { image: url }); })} className="w-full h-full" />
+        <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => updateDoc(doc(db, 'activities', activity.id), { image: url })} className="w-full h-full" />
       </div>
       <div className="p-8 flex-1 relative flex flex-col justify-center">
         {isAdmin && (
-          <button onClick={() => handleAdminAction(async () => { if(confirm(t.common.delete)) await deleteDoc(doc(db, 'activities', activity.id)); })} className="absolute top-6 right-6 text-rose-300 hover:text-rose-500 transition-colors"><Trash2 size={18}/></button>
-        )}
-        <div className="absolute top-6 right-16 sm:right-6 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-          <Tag size={12}/>
-          <div className="flex items-center">
-            <span className="text-[10px] font-black mr-0.5">$</span>
-            <EditableText isAdmin={isAdmin} text={activity.price || '0.00'} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { price: val }); })} className="text-[10px] font-black tracking-tight" />
+          <div className="absolute top-6 right-6 flex gap-2">
+            <button onClick={generateAIContent} disabled={isGenerating || !isAiReady} className={`p-2.5 rounded-xl bg-blue-50 text-[#118AB2] hover:bg-[#118AB2] hover:text-white transition-all shadow-sm ${!isAiReady ? 'opacity-30 cursor-not-allowed' : 'active:scale-90'}`}>
+              {isGenerating ? <Loader2 className="animate-spin" size={20}/> : <Wand2 size={20}/>}
+            </button>
+            <button onClick={() => { if(confirm(t.common.delete)) deleteDoc(doc(db, 'activities', activity.id)); }} className="text-rose-300 hover:text-rose-500 p-2.5 bg-rose-50 rounded-xl"><Trash2 size={20}/></button>
           </div>
+        )}
+        <div className="mb-2">
+          <EditableText isAdmin={isAdmin} text={activity.title} onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { title: val })} className="text-2xl font-black text-slate-800 leading-tight" />
         </div>
-        <div className="mb-2 mt-4 sm:mt-0">
-          <EditableText isAdmin={isAdmin} text={activity.title} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { title: val }); })} className="text-2xl font-black text-slate-800 leading-tight" />
-        </div>
-        <div className="max-w-md">
-          <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
-        </div>
-        {!isAdmin && activity.type === 'activity' && (
+        <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { description: val })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
+        {!isAdmin && (
           <div className="mt-4 flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-[#118AB2] opacity-0 group-hover/card:opacity-100 transition-opacity">
             <Sparkles size={10} /> {t.explora.tapToSee}
           </div>
@@ -840,9 +485,7 @@ function ListEditor({ items, field, title, icon: Icon, colorClass, isAdmin, cont
     if (newValue === null) currentList.splice(index, 1);
     else if (index === -1) currentList.push('...');
     else currentList[index] = newValue;
-    try {
-      await updateDoc(doc(db, 'content', 'main'), { [field]: currentList });
-    } catch (e) {}
+    await updateDoc(doc(db, 'content', 'main'), { [field]: currentList });
   };
 
   return (

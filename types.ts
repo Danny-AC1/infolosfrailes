@@ -33,6 +33,11 @@ export interface Activity {
   type: 'activity' | 'service';
   icon?: string;
   timestamp: any;
+  // AI Generated fields (now persistent and editable)
+  extendedDescription?: string;
+  whatToBring?: string[];
+  bestTime?: string;
+  safetyTips?: string[];
 }
 
 export interface AllyItem {
