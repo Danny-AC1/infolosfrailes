@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Info, Map as MapIcon, Globe, MessageSquare, ShieldCheck, 
   Ban, CheckCircle2, Car, Waves, Trash2, Utensils, 
@@ -7,14 +7,14 @@ import {
   MapPin, ExternalLink, Loader2, User, Image as ImageIcon, RefreshCw,
   Wallet, Phone, Calendar, ShoppingCart, X, CreditCard, DollarSign,
   Settings, Heart, Share2, Sparkles, Briefcase, Tag, ArrowRight, Navigation,
-  Languages
+  Languages, ClipboardList, Zap
 } from 'lucide-react';
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { SiteContent, Activity, Ally, Feedback, AllyItem } from './types';
-import { GoogleGenAI } from "@google/genai";
+import { SiteContent, Activity, Ally, Feedback, AllyItem, Reservation } from './types';
+import { GoogleGenAI, Type } from "@google/genai";
 import { translations } from './translations';
 
 // Components
@@ -22,6 +22,7 @@ import TabView from './components/TabView';
 import EditableText from './components/EditableText';
 import EditableImage from './components/EditableImage';
 import ReservationModal from './components/ReservationModal';
+import ActivityDetailsModal from './components/ActivityDetailsModal';
 
 const INITIAL_CONTENT: SiteContent = {
   id: 'main',
@@ -48,14 +49,11 @@ const INITIAL_CONTENT: SiteContent = {
   }
 };
 
-/**
- * Props for ActivityCard component
- * Includes an optional key prop to resolve strict TypeScript validation in JSX lists.
- */
 interface ActivityCardProps {
   activity: Activity;
   isAdmin: boolean;
   t: any;
+  onClick?: () => void;
   key?: React.Key;
 }
 
@@ -69,8 +67,17 @@ export default function App() {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [allies, setAllies] = useState<Ally[]>([]);
   const [feedbacks, setFeedbacks] = useState<(Feedback & { id: string })[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  
+  // State for AI-translated dynamic content
+  const [translatedContent, setTranslatedContent] = useState<SiteContent | null>(null);
+  const [translatedActivities, setTranslatedActivities] = useState<Activity[]>([]);
+  const [translatedAllies, setTranslatedAllies] = useState<Ally[]>([]);
+  const [isTranslating, setIsTranslating] = useState(false);
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [showAdminLogin, setShowAdminLogin] = useState(false);
+  const [showReservations, setShowReservations] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [clickCount, setClickCount] = useState(0);
   const [newFeedback, setNewFeedback] = useState({ name: '', comment: '' });
@@ -81,11 +88,93 @@ export default function App() {
   const [mapResults, setMapResults] = useState<Record<string, { text: string, links: any[] }>>({});
   
   const [selectedAllyForBooking, setSelectedAllyForBooking] = useState<Ally | null>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     localStorage.setItem('app_lang', language);
-  }, [language]);
+    if (language === 'en' && !isAdmin) {
+      translateDynamicData();
+    } else {
+      setTranslatedContent(null);
+      setTranslatedActivities([]);
+      setTranslatedAllies([]);
+    }
+  }, [language, isAdmin]);
+
+  // Translate dynamic data when Firebase source changes
+  useEffect(() => {
+    if (language === 'en' && !isAdmin && !isLoading) {
+      translateDynamicData();
+    }
+  }, [content, activities, allies]);
+
+  const translateDynamicData = async () => {
+    if (isTranslating) return;
+    setIsTranslating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      // We translate in one batch to maintain context and save tokens
+      const sourceData = {
+        content,
+        activities: activities.map(a => ({ id: a.id, title: a.title, description: a.description })),
+        allies: allies.map(a => ({ id: a.id, name: a.name, description: a.description, address: a.address }))
+      };
+
+      const prompt = `
+        Translate the following tourism application data from Spanish to English. 
+        It's for Playa Los Frailes, Machalilla National Park.
+        Keep the tone professional and inviting.
+        Keep the structure exactly as provided.
+        Return ONLY the translated JSON object.
+        Data: ${JSON.stringify(sourceData)}
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+
+      const result = JSON.parse(response.text || "{}");
+      
+      if (result.content) {
+        setTranslatedContent({ ...content, ...result.content });
+      }
+      if (result.activities) {
+        const translated = activities.map(original => {
+          const trans = result.activities.find((a: any) => a.id === original.id);
+          return trans ? { ...original, ...trans } : original;
+        });
+        setTranslatedActivities(translated);
+      }
+      if (result.allies) {
+        const translated = allies.map(original => {
+          const trans = result.allies.find((a: any) => a.id === original.id);
+          return trans ? { ...original, ...trans } : original;
+        });
+        setTranslatedAllies(translated);
+      }
+    } catch (e) {
+      console.error("Translation Error:", e);
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  // Computed data based on language and translation availability
+  const displayContent = useMemo(() => {
+    return (language === 'en' && translatedContent) ? translatedContent : content;
+  }, [language, translatedContent, content]);
+
+  const displayActivities = useMemo(() => {
+    return (language === 'en' && translatedActivities.length > 0) ? translatedActivities : activities;
+  }, [language, translatedActivities, activities]);
+
+  const displayAllies = useMemo(() => {
+    return (language === 'en' && translatedAllies.length > 0) ? translatedAllies : allies;
+  }, [language, translatedAllies, allies]);
 
   useEffect(() => {
     const unsubContent = onSnapshot(doc(db, 'content', 'main'), (snap) => {
@@ -109,7 +198,13 @@ export default function App() {
       setFeedbacks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Feedback & { id: string })));
     });
 
-    return () => { unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks(); };
+    const unsubReservations = onSnapshot(query(collection(db, 'reservations'), orderBy('timestamp', 'desc')), (snap) => {
+      setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() } as Reservation)));
+    });
+
+    return () => { 
+      unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks(); unsubReservations();
+    };
   }, []);
 
   const toggleLanguage = () => {
@@ -189,14 +284,13 @@ export default function App() {
     }
 
     try {
-      // Initialize Gemini with API key from environment
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = language === 'es' 
         ? `Instrucciones detalladas de cómo llegar a ${ally.name} ubicado en ${ally.address || 'Puerto López, Manabí'}.`
         : `Detailed instructions on how to get to ${ally.name} located at ${ally.address || 'Puerto Lopez, Manabi'}.`;
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite-latest",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: { 
           tools: [{ googleMaps: {} }],
@@ -237,7 +331,6 @@ export default function App() {
   };
 
   const submitFeedback = async (e: React.FormEvent) => {
-    // ... logic for feedback submission
     e.preventDefault();
     if (!newFeedback.name.trim() || !newFeedback.comment.trim()) return;
     setFeedbackStatus('sending');
@@ -265,7 +358,15 @@ export default function App() {
 
   return (
     <div className="flex flex-col min-h-screen bg-[#F2E8CF] pb-24 font-['Montserrat'] overflow-x-hidden">
-      {/* Botón Flotante Idioma */}
+      
+      {/* Dynamic Translation Loading Indicator */}
+      {isTranslating && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] bg-white/80 backdrop-blur-md px-6 py-2 rounded-full shadow-2xl border border-[#118AB2]/20 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
+          <Zap size={14} className="text-[#118AB2] animate-pulse" />
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">AI Translating dynamic content...</span>
+        </div>
+      )}
+
       <button 
         onClick={toggleLanguage}
         className="fixed top-6 right-6 z-[150] w-12 h-12 bg-white rounded-full shadow-2xl border border-slate-100 flex items-center justify-center text-slate-900 active:scale-90 transition-all group"
@@ -289,13 +390,16 @@ export default function App() {
             <button onClick={() => toggleSectionVisibility('tiendaVisible')} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border transition-all ${content.tiendaVisible ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-rose-500/20 border-rose-500 text-rose-400'}`}>
               {content.tiendaVisible ? <Eye size={12}/> : <EyeOff size={12}/>} {t.admin.tienda}
             </button>
+            <button onClick={() => setShowReservations(true)} className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[8px] font-black border border-blue-500 bg-blue-500/20 text-blue-400">
+              <ClipboardList size={12}/> {t.admin.reservations}
+            </button>
           </div>
           <button onClick={() => setIsAdmin(false)} className="bg-white/10 px-4 py-2 rounded-xl text-[9px] font-black border border-white/20">{t.admin.exit}</button>
         </div>
       )}
 
       <header className="relative h-[48vh] md:h-[58vh] w-full shadow-2xl overflow-hidden bg-slate-200">
-        <EditableImage isAdmin={isAdmin} src={content.heroImage} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroImage: url }); })} className="w-full h-full" />
+        <EditableImage isAdmin={isAdmin} src={displayContent.heroImage} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroImage: url }); })} className="w-full h-full" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8 sm:p-14 pointer-events-none">
           <div 
             onClick={() => {
@@ -307,10 +411,10 @@ export default function App() {
             }} 
             className="max-w-2xl cursor-pointer active:scale-[0.99] transition-transform pointer-events-auto"
           >
-            <EditableText isAdmin={isAdmin} text={content.heroTitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroTitle: val }); })} className="text-4xl sm:text-6xl font-black text-white mb-2 drop-shadow-2xl" />
+            <EditableText isAdmin={isAdmin} text={displayContent.heroTitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroTitle: val }); })} className="text-4xl sm:text-6xl font-black text-white mb-2 drop-shadow-2xl" />
           </div>
           <div className="pointer-events-auto">
-            <EditableText isAdmin={isAdmin} text={content.heroSubtitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroSubtitle: val }); })} className="text-lg sm:text-2xl text-white/90 font-semibold leading-tight drop-shadow-md max-w-xl" />
+            <EditableText isAdmin={isAdmin} text={displayContent.heroSubtitle} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'content', 'main'), { heroSubtitle: val }); })} className="text-lg sm:text-2xl text-white/90 font-semibold leading-tight drop-shadow-md max-w-xl" />
           </div>
         </div>
       </header>
@@ -341,15 +445,15 @@ export default function App() {
               tabs={[
                 { id: 'normativas', label: t.tabs.normativas, content: (
                   <div className="space-y-6">
-                    <ListEditor items={content.normativasPermitido} field="normativasPermitido" title={t.info.allowed} icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-200 text-emerald-800" isAdmin={isAdmin} content={content} />
-                    <ListEditor items={content.normativasNoPermitido} field="normativasNoPermitido" title={t.info.notAllowed} icon={Ban} colorClass="bg-rose-50 border-rose-200 text-rose-800" isAdmin={isAdmin} content={content} />
+                    <ListEditor items={displayContent.normativasPermitido} field="normativasPermitido" title={t.info.allowed} icon={CheckCircle2} colorClass="bg-emerald-50 border-emerald-200 text-emerald-800" isAdmin={isAdmin} content={displayContent} />
+                    <ListEditor items={displayContent.normativasNoPermitido} field="normativasNoPermitido" title={t.info.notAllowed} icon={Ban} colorClass="bg-rose-50 border-rose-200 text-rose-800" isAdmin={isAdmin} content={displayContent} />
                   </div>
                 )},
                 { id: 'parqueadero', label: t.tabs.parqueadero, content: (
-                  <ListEditor items={content.parqueaderoItems} field="parqueaderoItems" title={t.info.parking} icon={Car} colorClass="bg-white border-slate-200 text-amber-700" isAdmin={isAdmin} content={content} />
+                  <ListEditor items={displayContent.parqueaderoItems} field="parqueaderoItems" title={t.info.parking} icon={Car} colorClass="bg-white border-slate-200 text-amber-700" isAdmin={isAdmin} content={displayContent} />
                 )},
                 { id: 'seguridad', label: t.tabs.seguridad, content: (
-                  <ListEditor items={content.seguridadItems} field="seguridadItems" title={t.info.safety} icon={ShieldCheck} colorClass="bg-white border-slate-200 text-blue-700" isAdmin={isAdmin} content={content} />
+                  <ListEditor items={displayContent.seguridadItems} field="seguridadItems" title={t.info.safety} icon={ShieldCheck} colorClass="bg-white border-slate-200 text-blue-700" isAdmin={isAdmin} content={displayContent} />
                 )}
               ]}
             />
@@ -369,8 +473,14 @@ export default function App() {
                 )}
               </div>
               <div className="grid gap-8">
-                {activities.filter(a => a.type === 'activity').map(activity => (
-                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} />
+                {displayActivities.filter(a => a.type === 'activity').map(activity => (
+                  <ActivityCard 
+                    key={activity.id} 
+                    activity={activity} 
+                    isAdmin={isAdmin} 
+                    t={t} 
+                    onClick={() => !isAdmin && setSelectedActivity(activity)}
+                  />
                 ))}
               </div>
             </section>
@@ -386,10 +496,10 @@ export default function App() {
                 )}
               </div>
               <div className="grid gap-8">
-                {activities.filter(a => a.type === 'service').map(service => (
+                {displayActivities.filter(a => a.type === 'service').map(service => (
                   <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} />
                 ))}
-                {activities.filter(a => a.type === 'service').length === 0 && (
+                {displayActivities.filter(a => a.type === 'service').length === 0 && (
                   <p className="text-center py-10 bg-white/40 rounded-[2.5rem] border-2 border-dashed border-white/60 text-[10px] font-black uppercase tracking-widest text-slate-400">{t.explora.comingSoon}</p>
                 )}
               </div>
@@ -408,15 +518,15 @@ export default function App() {
 
             <div className="bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative">
                <div className="h-[300px] relative">
-                 <EditableImage isAdmin={isAdmin} src={content.ecuadorTravelPromo.image} onSave={(url) => updatePromo('ecuadorTravelPromo', { image: url })} className="w-full h-full" alt="Ecuador Travel" />
+                 <EditableImage isAdmin={isAdmin} src={displayContent.ecuadorTravelPromo.image} onSave={(url) => updatePromo('ecuadorTravelPromo', { image: url })} className="w-full h-full" alt="Ecuador Travel" />
                  <div className="absolute top-8 left-8 bg-blue-600 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex items-center gap-2 backdrop-blur-md bg-blue-600/90">
                    <Share2 size={14}/> {t.travel.socialLabel}
                  </div>
                </div>
                <div className="p-12 text-center">
-                  <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.title} onSave={(val) => updatePromo('ecuadorTravelPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
-                  <EditableText isAdmin={isAdmin} text={content.ecuadorTravelPromo.description} onSave={(val) => updatePromo('ecuadorTravelPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
-                  <a href={content.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-blue-600 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-blue-500/30">
+                  <EditableText isAdmin={isAdmin} text={displayContent.ecuadorTravelPromo.title} onSave={(val) => updatePromo('ecuadorTravelPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
+                  <EditableText isAdmin={isAdmin} text={displayContent.ecuadorTravelPromo.description} onSave={(val) => updatePromo('ecuadorTravelPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
+                  <a href={displayContent.ecuadorTravelPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-blue-600 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-blue-500/30">
                     {t.travel.enterSocial} <ExternalLink size={18}/>
                   </a>
                </div>
@@ -425,15 +535,15 @@ export default function App() {
             {(content.tiendaVisible || isAdmin) && (
               <div className={`bg-white rounded-[3.5rem] overflow-hidden shadow-2xl border border-white group relative transition-all duration-500 ${!content.tiendaVisible && isAdmin ? 'opacity-60 grayscale scale-95' : ''}`}>
                  <div className="h-[300px] relative">
-                   <EditableImage isAdmin={isAdmin} src={content.tiendaPromo.image} onSave={(url) => updatePromo('tiendaPromo', { image: url })} className="w-full h-full" alt="Arte Del Mar" />
+                   <EditableImage isAdmin={isAdmin} src={displayContent.tiendaPromo.image} onSave={(url) => updatePromo('tiendaPromo', { image: url })} className="w-full h-full" alt="Arte Del Mar" />
                    <div className="absolute top-8 right-8 bg-amber-500 text-white px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex items-center gap-2 backdrop-blur-md bg-amber-500/90">
                      <ShoppingBag size={14}/> {t.travel.storeLabel}
                    </div>
                  </div>
                  <div className="p-12 text-center">
-                    <EditableText isAdmin={isAdmin} text={content.tiendaPromo.title} onSave={(val) => updatePromo('tiendaPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
-                    <EditableText isAdmin={isAdmin} text={content.tiendaPromo.description} onSave={(val) => updatePromo('tiendaPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
-                    <a href={content.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-amber-500 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-amber-500/30">
+                    <EditableText isAdmin={isAdmin} text={displayContent.tiendaPromo.title} onSave={(val) => updatePromo('tiendaPromo', { title: val })} className="text-4xl font-black text-slate-900 mb-4 tracking-tight" />
+                    <EditableText isAdmin={isAdmin} text={displayContent.tiendaPromo.description} onSave={(val) => updatePromo('tiendaPromo', { description: val })} className="text-slate-500 text-base font-medium leading-relaxed mb-8 max-w-md mx-auto" multiline />
+                    <a href={displayContent.tiendaPromo.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-4 bg-amber-500 text-white px-12 py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all shadow-amber-500/30">
                       {t.travel.goStore} <ShoppingCart size={18}/>
                     </a>
                  </div>
@@ -454,7 +564,7 @@ export default function App() {
                )}
              </div>
              <div className="grid gap-12">
-               {allies.map(ally => (
+               {displayAllies.map(ally => (
                  <div key={ally.id} className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-white">
                     <div className="h-64 relative bg-slate-100">
                       <EditableImage isAdmin={isAdmin} src={ally.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'allies', ally.id), { image: url }); })} className="w-full h-full" />
@@ -595,6 +705,69 @@ export default function App() {
         <ReservationModal ally={selectedAllyForBooking} onClose={() => setSelectedAllyForBooking(null)} language={language} />
       )}
 
+      {selectedActivity && (
+        <ActivityDetailsModal 
+          activity={selectedActivity} 
+          onClose={() => setSelectedActivity(null)} 
+          language={language} 
+          t={t}
+        />
+      )}
+
+      {/* Modal de Reservas para Administrador */}
+      {showReservations && isAdmin && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white w-full max-w-2xl h-[85vh] rounded-[3rem] p-8 sm:p-12 flex flex-col shadow-2xl relative overflow-hidden">
+             <button onClick={() => setShowReservations(false)} className="absolute top-8 right-8 p-3 bg-slate-100 rounded-full hover:bg-rose-50 hover:text-rose-500 transition-all">
+               <X size={24}/>
+             </button>
+             
+             <div className="flex items-center gap-4 mb-10">
+               <div className="p-4 bg-blue-500 text-white rounded-[1.5rem] shadow-xl shadow-blue-500/20">
+                 <ClipboardList size={32}/>
+               </div>
+               <div>
+                 <h2 className="text-2xl font-black text-slate-900 leading-none">{t.admin.reservations}</h2>
+                 <p className="text-xs font-bold text-slate-400 mt-2 uppercase tracking-widest">Historial de solicitudes</p>
+               </div>
+             </div>
+
+             <div className="flex-1 overflow-y-auto pr-2 no-scrollbar space-y-4">
+                {reservations.map(res => (
+                  <div key={res.id} className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest block mb-1">{res.allyName}</span>
+                        <h4 className="text-lg font-black text-slate-900">{res.customerName}</h4>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-black text-slate-400 uppercase block">{res.date}</span>
+                        <span className="text-lg font-black text-emerald-600">$ {res.total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                       {res.items.map((item, i) => (
+                         <span key={i} className="text-[9px] font-bold bg-white px-3 py-1 rounded-full border border-slate-200 text-slate-600">
+                           {item}
+                         </span>
+                       ))}
+                    </div>
+                    <button onClick={() => deleteDoc(doc(db, 'reservations', res.id))} className="absolute bottom-6 right-6 p-2 text-rose-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all">
+                       <Trash size={18}/>
+                    </button>
+                  </div>
+                ))}
+                {reservations.length === 0 && (
+                  <div className="h-full flex flex-col items-center justify-center text-center opacity-40">
+                    <ShoppingCart size={64} className="mb-4 text-slate-300"/>
+                    <p className="font-black uppercase tracking-widest text-xs">{t.common.noReservations}</p>
+                  </div>
+                )}
+             </div>
+          </div>
+        </div>
+      )}
+
       {showAdminLogin && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[200] flex items-center justify-center p-6 animate-in fade-in">
           <div className="bg-white w-full max-sm rounded-[3rem] p-10 shadow-2xl animate-in zoom-in-95 duration-300">
@@ -616,7 +789,7 @@ export default function App() {
 /**
  * ActivityCard component for displaying individual activities.
  */
-function ActivityCard({ activity, isAdmin, t }: ActivityCardProps) {
+function ActivityCard({ activity, isAdmin, t, onClick }: ActivityCardProps) {
   const handleAdminAction = async (action: () => Promise<void>) => {
     if (!isAdmin) return;
     try {
@@ -627,7 +800,10 @@ function ActivityCard({ activity, isAdmin, t }: ActivityCardProps) {
   };
 
   return (
-    <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card">
+    <div 
+      onClick={onClick}
+      className={`bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card ${!isAdmin && activity.type === 'activity' ? 'cursor-pointer' : ''}`}
+    >
       <div className="w-full sm:w-56 h-56 relative bg-slate-100 flex-shrink-0">
         <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { image: url }); })} className="w-full h-full" />
       </div>
@@ -648,13 +824,18 @@ function ActivityCard({ activity, isAdmin, t }: ActivityCardProps) {
         <div className="max-w-md">
           <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => handleAdminAction(async () => { await updateDoc(doc(db, 'activities', activity.id), { description: val }); })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
         </div>
+        {!isAdmin && activity.type === 'activity' && (
+          <div className="mt-4 flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-[#118AB2] opacity-0 group-hover/card:opacity-100 transition-opacity">
+            <Sparkles size={10} /> {t.explora.tapToSee}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 function ListEditor({ items, field, title, icon: Icon, colorClass, isAdmin, content }: any) {
-  const updateList = async (field: keyof SiteContent, index: number, newValue: string | null) => {
+  const updateList = async (field: string, index: number, newValue: string | null) => {
     const currentList = Array.isArray(content[field]) ? [...(content[field] as string[])] : [];
     if (newValue === null) currentList.splice(index, 1);
     else if (index === -1) currentList.push('...');

@@ -4,8 +4,10 @@ import { Ally, AllyItem } from '../types';
 import { 
   X, CheckCircle2, CreditCard, Send, User, 
   Calendar, Phone, Info, ShoppingCart, ArrowRight, Wallet,
-  Utensils, Bed, DollarSign
+  Utensils, Bed, DollarSign, Loader2
 } from 'lucide-react';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 
 interface ReservationModalProps {
   ally: Ally;
@@ -79,6 +81,7 @@ const modalTranslations = {
 export default function ReservationModal({ ally, onClose, language = 'es' }: ReservationModalProps) {
   const mt = modalTranslations[language];
   const [step, setStep] = useState<Step>('select');
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
   const [customerInfo, setCustomerInfo] = useState({ name: '', date: '' });
 
@@ -89,30 +92,49 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
     }));
   };
 
-  const total = (ally.items || [])
-    .filter(i => selectedItems[i.id])
-    .reduce((acc, i) => acc + parseFloat(i.price || '0'), 0);
+  const selectedObjects = (ally.items || []).filter(i => selectedItems[i.id]);
+  const total = selectedObjects.reduce((acc, i) => acc + parseFloat(i.price || '0'), 0);
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (!customerInfo.name || !customerInfo.date) return;
+    
+    setIsSaving(true);
+    try {
+      // Guardar en Firestore para el administrador
+      await addDoc(collection(db, 'reservations'), {
+        allyId: ally.id,
+        allyName: ally.name,
+        customerName: customerInfo.name,
+        date: customerInfo.date,
+        total: total,
+        items: selectedObjects.map(i => i.name),
+        status: 'pendiente',
+        timestamp: serverTimestamp()
+      });
 
-    const selectedList = (ally.items || [])
-      .filter(i => selectedItems[i.id])
-      .map(i => `- ${i.name} ($${i.price})`)
-      .join('\n');
+      // Preparar WhatsApp
+      const selectedList = selectedObjects
+        .map(i => `- ${i.name} ($${i.price})`)
+        .join('\n');
 
-    const message = encodeURIComponent(
-      `${mt.labels.waGreeting} ${ally.name}! 👋\n\n` +
-      `${mt.labels.waBooking}\n` +
-      `👤 ${mt.labels.waCustomer}: ${customerInfo.name}\n` +
-      `📅 ${mt.labels.waDate}: ${customerInfo.date}\n\n` +
-      `📦 ${mt.labels.waOrder}:\n${selectedList}\n\n` +
-      `💰 ${mt.labels.waTotal}: $${total.toFixed(2)}\n\n` +
-      `${mt.labels.waFoot}`
-    );
+      const message = encodeURIComponent(
+        `${mt.labels.waGreeting} ${ally.name}! 👋\n\n` +
+        `${mt.labels.waBooking}\n` +
+        `👤 ${mt.labels.waCustomer}: ${customerInfo.name}\n` +
+        `📅 ${mt.labels.waDate}: ${customerInfo.date}\n\n` +
+        `📦 ${mt.labels.waOrder}:\n${selectedList}\n\n` +
+        `💰 ${mt.labels.waTotal}: $${total.toFixed(2)}\n\n` +
+        `${mt.labels.waFoot}`
+      );
 
-    window.open(`https://wa.me/${ally.whatsapp?.replace(/\+/g, '')}?text=${message}`, '_blank');
-    onClose();
+      window.open(`https://wa.me/${ally.whatsapp?.replace(/\+/g, '')}?text=${message}`, '_blank');
+      onClose();
+    } catch (e) {
+      console.error(e);
+      alert("Error al procesar reserva");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const isHotel = ally.type === 'hospedaje';
@@ -121,7 +143,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
       <div className="bg-white w-full max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-[3rem] sm:rounded-[3rem] flex flex-col overflow-hidden shadow-2xl">
         
-        {/* Header */}
         <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
             <h3 className="text-2xl font-black text-slate-900 leading-none">{ally.name}</h3>
@@ -134,7 +155,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
           
           {step === 'select' && (
@@ -175,12 +195,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                     </div>
                   </div>
                 ))}
-                {(ally.items || []).length === 0 && (
-                  <div className="text-center py-10 bg-slate-50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
-                    <Info className="mx-auto text-slate-300 mb-2" size={32}/>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{mt.labels.empty}</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -246,7 +260,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
 
         </div>
 
-        {/* Footer Actions */}
         <div className="p-8 border-t border-slate-100 bg-white shadow-inner">
           {step === 'select' && (
             <button 
@@ -273,10 +286,12 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
             <div className="flex gap-4">
               <button onClick={() => setStep('details')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{mt.labels.back}</button>
               <button 
+                disabled={isSaving}
                 onClick={handleFinish}
-                className="flex-[2] py-6 rounded-[2rem] bg-[#25D366] text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl hover:brightness-110 active:scale-95 transition-all"
+                className="flex-[2] py-6 rounded-[2rem] bg-[#25D366] text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
               >
-                {mt.labels.sendProof} <Send size={18}/>
+                {isSaving ? <Loader2 className="animate-spin" /> : <Send size={18}/>}
+                {mt.labels.sendProof}
               </button>
             </div>
           )}

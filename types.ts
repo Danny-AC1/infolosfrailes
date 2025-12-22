@@ -61,3 +61,15 @@ export interface Feedback {
   comment: string;
   timestamp: any;
 }
+
+export interface Reservation {
+  id: string;
+  allyId: string;
+  allyName: string;
+  customerName: string;
+  date: string;
+  total: number;
+  items: string[];
+  status: 'pendiente' | 'confirmada';
+  timestamp: any;
+}
