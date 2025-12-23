@@ -4,7 +4,7 @@ import { Ally, AllyItem } from '../types';
 import { 
   X, CheckCircle2, CreditCard, Send, User, 
   Calendar, Phone, Info, ShoppingCart, ArrowRight, Wallet,
-  Utensils, Bed, DollarSign, Loader2
+  Utensils, Bed, DollarSign, Loader2, Clock, Image as ImageIcon
 } from 'lucide-react';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -28,6 +28,7 @@ const modalTranslations = {
       empty: 'No hay opciones disponibles',
       customerName: 'Tu Nombre Completo',
       resDate: 'Fecha de la Reserva',
+      resTime: 'Hora de la Reserva',
       transfer: 'Pago por Transferencia',
       transferDesc: 'Para confirmar tu reserva, el local requiere el pago anticipado. Copia los datos y adjunta el comprobante.',
       bankInfo: 'Información Bancaria',
@@ -42,9 +43,11 @@ const modalTranslations = {
       waBooking: 'Me gustaría realizar una reserva:',
       waCustomer: 'Cliente',
       waDate: 'Fecha',
+      waTime: 'Hora',
       waOrder: 'Pedido',
       waTotal: 'Total',
-      waFoot: 'Escribo para confirmar disponibilidad y proceder con el pago.'
+      waFoot: 'Escribo para confirmar disponibilidad y proceder con el pago.',
+      viewGallery: 'Ver Fotos'
     }
   },
   en: {
@@ -57,6 +60,7 @@ const modalTranslations = {
       empty: 'No options available',
       customerName: 'Your Full Name',
       resDate: 'Reservation Date',
+      resTime: 'Reservation Time',
       transfer: 'Bank Transfer Payment',
       transferDesc: 'To confirm your booking, the spot requires advance payment. Copy the details and attach proof.',
       bankInfo: 'Bank Information',
@@ -71,9 +75,11 @@ const modalTranslations = {
       waBooking: 'I would like to make a reservation:',
       waCustomer: 'Customer',
       waDate: 'Date',
+      waTime: 'Time',
       waOrder: 'Order',
       waTotal: 'Total',
-      waFoot: 'I am writing to confirm availability and proceed with payment.'
+      waFoot: 'I am writing to confirm availability and proceed with payment.',
+      viewGallery: 'View Photos'
     }
   }
 };
@@ -83,7 +89,8 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
   const [step, setStep] = useState<Step>('select');
   const [isSaving, setIsSaving] = useState(false);
   const [selectedItems, setSelectedItems] = useState<Record<string, number>>({});
-  const [customerInfo, setCustomerInfo] = useState({ name: '', date: '' });
+  const [customerInfo, setCustomerInfo] = useState({ name: '', date: '', time: '' });
+  const [activeGallery, setActiveGallery] = useState<string[] | null>(null);
 
   const toggleItem = (itemId: string) => {
     setSelectedItems(prev => ({
@@ -96,7 +103,7 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
   const total = selectedObjects.reduce((acc, i) => acc + parseFloat(i.price || '0'), 0);
 
   const handleFinish = async () => {
-    if (!customerInfo.name || !customerInfo.date) return;
+    if (!customerInfo.name || !customerInfo.date || !customerInfo.time) return;
     
     setIsSaving(true);
     try {
@@ -106,6 +113,7 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
         allyName: ally.name,
         customerName: customerInfo.name,
         date: customerInfo.date,
+        time: customerInfo.time,
         total: total,
         items: selectedObjects.map(i => i.name),
         status: 'pendiente',
@@ -121,7 +129,8 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
         `${mt.labels.waGreeting} ${ally.name}! 👋\n\n` +
         `${mt.labels.waBooking}\n` +
         `👤 ${mt.labels.waCustomer}: ${customerInfo.name}\n` +
-        `📅 ${mt.labels.waDate}: ${customerInfo.date}\n\n` +
+        `📅 ${mt.labels.waDate}: ${customerInfo.date}\n` +
+        `⏰ ${mt.labels.waTime}: ${customerInfo.time}\n\n` +
         `📦 ${mt.labels.waOrder}:\n${selectedList}\n\n` +
         `💰 ${mt.labels.waTotal}: $${total.toFixed(2)}\n\n` +
         `${mt.labels.waFoot}`
@@ -141,6 +150,22 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
 
   return (
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
+      
+      {/* Lightbox for gallery images */}
+      {activeGallery && (
+        <div className="fixed inset-0 z-[1100] bg-black/95 flex flex-col items-center justify-center p-6" onClick={() => setActiveGallery(null)}>
+          <button className="absolute top-8 right-8 text-white p-2 bg-white/10 rounded-full hover:bg-white/20">
+            <X size={32}/>
+          </button>
+          <div className="w-full max-w-4xl flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory py-10" onClick={e => e.stopPropagation()}>
+            {activeGallery.map((img, i) => (
+              <img key={i} src={img} className="h-[60vh] object-contain snap-center rounded-3xl shadow-2xl" alt="Gallery detail"/>
+            ))}
+          </div>
+          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mt-4">Toca fuera para cerrar</p>
+        </div>
+      )}
+
       <div className="bg-white w-full max-w-lg h-[90vh] sm:h-auto sm:max-h-[85vh] rounded-t-[3rem] sm:rounded-[3rem] flex flex-col overflow-hidden shadow-2xl">
         
         <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
@@ -171,10 +196,9 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                 {(ally.items || []).map(item => (
                   <div 
                     key={item.id} 
-                    onClick={() => toggleItem(item.id)}
-                    className={`p-4 rounded-3xl border-2 transition-all flex items-center gap-4 cursor-pointer relative overflow-hidden ${selectedItems[item.id] ? 'border-[#118AB2] bg-blue-50/50 shadow-md' : 'border-slate-100 bg-white hover:border-slate-200'}`}
+                    className={`group/item p-4 rounded-3xl border-2 transition-all flex items-center gap-4 relative overflow-hidden ${selectedItems[item.id] ? 'border-[#118AB2] bg-blue-50/50 shadow-md' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                   >
-                    <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0 relative">
                       {item.image ? (
                         <img src={item.image} className="w-full h-full object-cover" alt={item.name}/>
                       ) : (
@@ -182,15 +206,32 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                           {isHotel ? <Bed size={24}/> : <Utensils size={24}/>}
                         </div>
                       )}
+                      
+                      {/* Gallery trigger button if it's a hotel room */}
+                      {isHotel && item.images && item.images.length > 0 && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setActiveGallery(item.images || null); }}
+                          className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
+                        >
+                          <ImageIcon size={20}/>
+                        </button>
+                      )}
                     </div>
-                    <div className="flex-1">
+                    
+                    <div className="flex-1 cursor-pointer" onClick={() => toggleItem(item.id)}>
                       <h5 className="text-sm font-black text-slate-900 leading-tight mb-1">{item.name}</h5>
-                      <p className="text-[10px] text-slate-500 font-medium mb-2 line-clamp-2">{item.description}</p>
-                      <div className="flex items-center gap-1 bg-white inline-flex px-2 py-1 rounded-lg border border-slate-100 shadow-sm">
+                      <div className="flex items-center gap-2">
                         <span className="text-[11px] font-black text-[#118AB2] tracking-tighter">$ {item.price}</span>
+                        {isHotel && item.images && item.images.length > 0 && (
+                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.images.length} Fotos</span>
+                        )}
                       </div>
                     </div>
-                    <div className={`w-8 h-8 rounded-2xl flex items-center justify-center border-2 transition-all ${selectedItems[item.id] ? 'bg-[#118AB2] border-[#118AB2] rotate-0 scale-110' : 'border-slate-200 rotate-45 scale-90'}`}>
+
+                    <div 
+                      onClick={() => toggleItem(item.id)}
+                      className={`w-8 h-8 rounded-2xl flex items-center justify-center border-2 transition-all cursor-pointer ${selectedItems[item.id] ? 'bg-[#118AB2] border-[#118AB2] rotate-0 scale-110' : 'border-slate-200 rotate-45 scale-90'}`}
+                    >
                       {selectedItems[item.id] && <CheckCircle2 size={16} className="text-white"/>}
                     </div>
                   </div>
@@ -218,16 +259,31 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">{mt.labels.resDate}</label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
-                  <input 
-                    type="date" 
-                    value={customerInfo.date}
-                    onChange={(e) => setCustomerInfo(p => ({ ...p, date: e.target.value }))}
-                    className="w-full bg-white border-2 border-slate-100 rounded-2xl p-4 pl-12 font-bold outline-none focus:border-[#118AB2] transition-all" 
-                  />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">{mt.labels.resDate}</label>
+                  <div className="relative">
+                    <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                    <input 
+                      type="date" 
+                      value={customerInfo.date}
+                      onChange={(e) => setCustomerInfo(p => ({ ...p, date: e.target.value }))}
+                      className="w-full bg-white border-2 border-slate-100 rounded-2xl p-4 pl-12 font-bold outline-none focus:border-[#118AB2] transition-all" 
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-3 ml-2">{mt.labels.resTime}</label>
+                  <div className="relative">
+                    <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18}/>
+                    <input 
+                      type="time" 
+                      value={customerInfo.time}
+                      onChange={(e) => setCustomerInfo(p => ({ ...p, time: e.target.value }))}
+                      className="w-full bg-white border-2 border-slate-100 rounded-2xl p-4 pl-12 font-bold outline-none focus:border-[#118AB2] transition-all" 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -274,7 +330,7 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
             <div className="flex gap-4">
               <button onClick={() => setStep('select')} className="flex-1 py-6 rounded-[2rem] bg-slate-100 text-slate-400 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">{mt.labels.back}</button>
               <button 
-                disabled={!customerInfo.name || !customerInfo.date}
+                disabled={!customerInfo.name || !customerInfo.date || !customerInfo.time}
                 onClick={() => setStep('payment')} 
                 className="flex-[2] py-6 rounded-[2rem] bg-slate-900 text-white font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl active:scale-95 transition-all disabled:opacity-30"
               >

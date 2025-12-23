@@ -50,7 +50,21 @@ export const translations = {
       socialLabel: 'Red Social Turística',
       storeLabel: 'Tienda Online',
       enterSocial: 'Entrar a Ecuador Travel',
-      goStore: 'Ir a Arte Del Mar'
+      goStore: 'Ir a Arte Del Mar',
+      socialDetailTitle: 'La Única Red Social Turística del Ecuador 🇪🇨',
+      socialFeatures: [
+        'Agrega Historias de 24h 📌',
+        'Publica Tus mejores fotos de Lugares del Ecuador 🌇',
+        '¿No sabes qué hacer? Planifica con itinerarios según tu presupuesto 📝',
+        'Busca qué hay cerca de ti (Restaurantes, Hospedaje, etc.) 🟢',
+        'Agrega nuevos destinos turísticos en la App 📎',
+        'Participa en la Galería de la Comunidad 🖼️📸',
+        'Sigue a personas y habla con ellas 🗨️',
+        'Chat Virtual de Viaje integrado 💬',
+        'Crea Grupos de Viajes 👥✈️',
+        'Comparte Itinerarios en tus grupos 📝'
+      ],
+      socialCTA: 'Regístrate y ayuda a que la app sea grande. Ecuador Travel. ✅🇪🇨🗺️🌎.'
     },
     locales: {
       title: 'Locales',
@@ -64,7 +78,10 @@ export const translations = {
       routeGuide: 'Guía de Llegada',
       searchDirect: 'BUSCAR RUTA DIRECTA',
       whatsapp: 'WhatsApp de Reservas',
-      bank: 'Datos Bancarios'
+      bank: 'Datos Bancarios',
+      manageGallery: 'Fotos de Habitación',
+      addPhoto: 'Agregar Foto',
+      noPhotos: 'Sin fotos aún.'
     },
     feedback: {
       title: 'Tu opinión',
@@ -82,11 +99,15 @@ export const translations = {
       delete: '¿Borrar?',
       edit: 'Editar enlace',
       noReservations: 'No hay reservas registradas.'
+    },
+    reservationModal: {
+      resTime: 'Hora de la Reserva',
+      waTime: 'Hora'
     }
   },
   en: {
     nav: {
-      info: 'Guide',
+      info: 'Info',
       explora: 'Explore',
       travel: 'Travel',
       aliados: 'Local Spots',
@@ -134,7 +155,21 @@ export const translations = {
       socialLabel: 'Tourism Social Network',
       storeLabel: 'Online Store',
       enterSocial: 'Enter Ecuador Travel',
-      goStore: 'Go to Arte Del Mar'
+      goStore: 'Go to Arte Del Mar',
+      socialDetailTitle: 'The Only Tourism Social Network in Ecuador 🇪🇨',
+      socialFeatures: [
+        'Add 24h Stories 📌',
+        'Post your best photos of Ecuador 🌇',
+        'Don\'t know what to do? Plan with budget itineraries 📝',
+        'Search what\'s near you (Restaurants, Lodging, etc.) 🟢',
+        'Add new tourist destinations in the App 📎',
+        'Join the Community Gallery 🖼️📸',
+        'Follow people and chat with them 🗨️',
+        'Integrated Virtual Travel Chat 💬',
+        'Create Travel Groups 👥✈️',
+        'Share Itineraries in your groups 📝'
+      ],
+      socialCTA: 'Register and help the app grow. Ecuador Travel. ✅🇪🇨🗺️🌎.'
     },
     locales: {
       title: 'Local Spots',
@@ -148,7 +183,10 @@ export const translations = {
       routeGuide: 'Route Guide',
       searchDirect: 'SEARCH DIRECT ROUTE',
       whatsapp: 'WhatsApp Booking',
-      bank: 'Bank Details'
+      bank: 'Bank Details',
+      manageGallery: 'Room Photos',
+      addPhoto: 'Add Photo',
+      noPhotos: 'No photos yet.'
     },
     feedback: {
       title: 'Your Opinion',
@@ -166,6 +204,10 @@ export const translations = {
       delete: 'Delete?',
       edit: 'Edit link',
       noReservations: 'No bookings found.'
+    },
+    reservationModal: {
+      resTime: 'Reservation Time',
+      waTime: 'Time'
     }
   }
 };

@@ -46,6 +46,7 @@ export interface AllyItem {
   price: string;
   description: string;
   image: string;
+  images?: string[]; // Supporting room/item gallery
 }
 
 export interface Ally {
@@ -73,6 +74,7 @@ export interface Reservation {
   allyName: string;
   customerName: string;
   date: string;
+  time: string;
   total: number;
   items: string[];
   status: 'pendiente' | 'confirmada';
