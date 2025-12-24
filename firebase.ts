@@ -1,4 +1,5 @@
 
+// Fix: Import standard modular functions from firebase/app
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -13,9 +14,10 @@ const firebaseConfig = {
   appId: "1:794450761302:web:e0e493d4aab10ea4e94df7"
 };
 
+// Fix: Initialize Firebase using a cleaner modular pattern
 let app;
 try {
-  if (!getApps().length) {
+  if (getApps().length === 0) {
     app = initializeApp(firebaseConfig);
   } else {
     app = getApp();
@@ -27,6 +29,7 @@ try {
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+// Fix: Robust check for window before enabling persistence
 if (typeof window !== 'undefined' && db) {
   enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {

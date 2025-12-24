@@ -11,7 +11,6 @@ import {
 import { 
   collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, setDoc, deleteDoc, query, orderBy 
 } from 'firebase/firestore';
-import { GoogleGenAI, Type } from "@google/genai";
 import { db } from './firebase';
 import { SiteContent, Activity, Ally, Feedback, Reservation, AllyItem } from './types';
 import { translations } from './translations';
@@ -55,33 +54,49 @@ interface ActivityCardProps {
   isAdmin: boolean;
   t: any;
   onClick?: () => void;
-  onGenerateIA?: (id: string, title: string) => Promise<void> | void;
-  isGenerating?: boolean;
 }
 
-function ActivityCard({ activity, isAdmin, t, onClick, onGenerateIA, isGenerating }: ActivityCardProps) {
+function ActivityCard({ activity, isAdmin, t, onClick }: ActivityCardProps) {
   return (
     <div onClick={onClick} className={`bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card ${!isAdmin ? 'cursor-pointer' : ''}`}>
       <div className="w-full sm:w-56 h-56 relative bg-slate-100 flex-shrink-0">
         <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => updateDoc(doc(db, 'activities', activity.id), { image: url })} className="w-full h-full" />
+        
+        {!isAdmin && activity.price && (
+          <div className="absolute top-4 left-4 bg-emerald-500 text-white px-3 py-1.5 rounded-full shadow-lg z-10 flex items-center gap-1 animate-in zoom-in duration-300">
+            <DollarSign size={12} strokeWidth={3} />
+            <span className="text-[10px] font-black tracking-tighter">{activity.price}</span>
+          </div>
+        )}
       </div>
+
       <div className="p-8 flex-1 relative flex flex-col justify-center">
         {isAdmin && (
           <div className="absolute top-6 right-6 flex gap-2">
-            <button 
-              onClick={(e) => { e.stopPropagation(); onGenerateIA?.(activity.id, activity.title); }} 
-              disabled={isGenerating}
-              className={`p-2.5 rounded-xl transition-all shadow-md ${isGenerating ? 'bg-slate-100 text-slate-400' : 'bg-blue-500 text-white hover:bg-blue-600 active:scale-90'}`}
-            >
-              {isGenerating ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20}/>}
+            <button onClick={(e) => { e.stopPropagation(); if(confirm(t.common.delete)) deleteDoc(doc(db, 'activities', activity.id)); }} className="text-rose-300 hover:text-rose-500 p-2.5 bg-rose-50 rounded-xl transition-all">
+              <Trash2 size={20}/>
             </button>
-            <button onClick={(e) => { e.stopPropagation(); if(confirm(t.common.delete)) deleteDoc(doc(db, 'activities', activity.id)); }} className="text-rose-300 hover:text-rose-500 p-2.5 bg-rose-50 rounded-xl transition-all"><Trash2 size={20}/></button>
           </div>
         )}
+
         <div className="mb-2">
           <EditableText isAdmin={isAdmin} text={activity.title} onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { title: val })} className="text-2xl font-black text-slate-800 leading-tight" />
         </div>
+
+        {isAdmin && (
+          <div className="mb-3 flex items-center gap-2 bg-emerald-50 p-2 rounded-xl border border-emerald-100 w-fit" onClick={(e) => e.stopPropagation()}>
+            <DollarSign size={14} className="text-emerald-500" />
+            <EditableText 
+              isAdmin={true} 
+              text={activity.price || '0.00'} 
+              onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { price: val })} 
+              className="text-xs font-black text-emerald-700" 
+            />
+          </div>
+        )}
+
         <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { description: val })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
+        
         {!isAdmin && (
           <div className="mt-4 flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-[#118AB2] opacity-0 group-hover/card:opacity-100 transition-opacity">
             <Sparkles size={10} /> {t.explora.tapToSee}
@@ -121,58 +136,59 @@ function ListEditor({ items, field, title, icon: Icon, colorClass, isAdmin, cont
   );
 }
 
-// Sub-component to manage a gallery of images for an item (room/dish)
+// Componente para gestionar galerías de imágenes de habitaciones o platos
 function GalleryEditor({ images, onUpdate, t }: { images: string[], onUpdate: (newImages: string[]) => void, t: any }) {
   const [showAdd, setShowAdd] = useState(false);
   const [newUrl, setNewUrl] = useState('');
 
   const addPhoto = () => {
     if (newUrl.trim()) {
-      onUpdate([...images, newUrl.trim()]);
+      onUpdate([...(images || []), newUrl.trim()]);
       setNewUrl('');
       setShowAdd(false);
     }
   };
 
   const removePhoto = (idx: number) => {
-    const filtered = images.filter((_, i) => i !== idx);
+    const filtered = (images || []).filter((_, i) => i !== idx);
     onUpdate(filtered);
   };
 
   return (
-    <div className="mt-4 p-4 bg-white/50 rounded-2xl border border-slate-200">
+    <div className="mt-4 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
       <div className="flex justify-between items-center mb-3">
-        <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t.locales.manageGallery}</span>
-        <button onClick={() => setShowAdd(!showAdd)} className="text-[#118AB2] hover:bg-white p-1 rounded-lg transition-all">
+        <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">{t.locales.manageGallery}</span>
+        <button onClick={(e) => { e.stopPropagation(); setShowAdd(!showAdd); }} className="text-[#118AB2] hover:bg-white p-1 rounded-lg transition-all">
           <Plus size={14}/>
         </button>
       </div>
 
       {showAdd && (
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex gap-2 animate-in slide-in-from-top-2">
           <input 
             type="text" 
             value={newUrl} 
             onChange={(e) => setNewUrl(e.target.value)}
-            className="flex-1 text-xs p-2 rounded-xl bg-white border border-slate-200 outline-none focus:border-[#118AB2]"
-            placeholder="URL de la foto..."
+            className="flex-1 text-[10px] p-2 rounded-xl bg-white border border-slate-200 outline-none focus:border-[#118AB2] font-bold"
+            placeholder="Pega URL de imagen..."
+            onClick={e => e.stopPropagation()}
           />
-          <button onClick={addPhoto} className="bg-[#118AB2] text-white p-2 rounded-xl active:scale-95 transition-all">
+          <button onClick={addPhoto} className="bg-[#118AB2] text-white p-2 rounded-xl active:scale-95 transition-all shadow-md">
             <CheckCircle2 size={16}/>
           </button>
         </div>
       )}
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-        {images.length === 0 ? (
-          <span className="text-[10px] text-slate-300 italic">{t.locales.noPhotos}</span>
+        {(!images || images.length === 0) ? (
+          <span className="text-[9px] text-slate-300 italic font-medium">{t.locales.noPhotos}</span>
         ) : (
           images.map((img, i) => (
-            <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 group">
-              <img src={img} className="w-full h-full object-cover" alt="Room preview"/>
+            <div key={i} className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 group/img shadow-sm border border-slate-200">
+              <img src={img} className="w-full h-full object-cover" alt="Preview"/>
               <button 
-                onClick={() => removePhoto(i)}
-                className="absolute top-1 right-1 bg-rose-500 text-white p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                onClick={(e) => { e.stopPropagation(); removePhoto(i); }}
+                className="absolute top-0 right-0 bg-rose-500 text-white p-1 rounded-bl-xl opacity-0 group-hover/img:opacity-100 transition-opacity shadow-lg"
               >
                 <XIcon size={10}/>
               </button>
@@ -202,7 +218,6 @@ export default function App() {
   const [clickCount, setClickCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'info' | 'explora' | 'travel' | 'feedback' | 'aliados' | 'reservations'>('info');
   const [isLoading, setIsLoading] = useState(true);
-  const [isGeneratingIA, setIsGeneratingIA] = useState<string | null>(null);
   
   const [selectedAllyForBooking, setSelectedAllyForBooking] = useState<Ally | null>(null);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
@@ -247,38 +262,6 @@ export default function App() {
       unsubContent(); unsubActivities(); unsubAllies(); unsubFeedbacks(); unsubReservations(); 
     };
   }, []);
-
-  const handleGenerateIA = async (id: string, title: string) => {
-    if (!isAdmin) return;
-    setIsGeneratingIA(id);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Genera una guía turística detallada para "${title}" en Playa Los Frailes. Devuelve exclusivamente JSON con: description (máx 60 caracteres), extendedDescription (máx 300 caracteres), whatToBring (array de 4 strings), bestTime (string corto), safetyTips (array de 3 strings).`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              description: { type: Type.STRING },
-              extendedDescription: { type: Type.STRING },
-              whatToBring: { type: Type.ARRAY, items: { type: Type.STRING } },
-              bestTime: { type: Type.STRING },
-              safetyTips: { type: Type.ARRAY, items: { type: Type.STRING } }
-            }
-          }
-        }
-      });
-      const data = JSON.parse(response.text || "{}");
-      await updateDoc(doc(db, 'activities', id), data);
-    } catch (e) {
-      console.error(e);
-      alert("Error con la IA. Verifica tu API KEY.");
-    } finally {
-      setIsGeneratingIA(null);
-    }
-  };
 
   const submitFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,12 +383,12 @@ export default function App() {
                   <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.activities}</h2>
                 </div>
                 {isAdmin && (
-                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', type: 'activity', timestamp: serverTimestamp() }); })} className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
+                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', price: '0.00', type: 'activity', timestamp: serverTimestamp() }); })} className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
                 )}
               </div>
               <div className="grid gap-8">
                 {activities.filter(a => a.type === 'activity').map(activity => (
-                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(activity)} onGenerateIA={handleGenerateIA} isGenerating={isGeneratingIA === activity.id} />
+                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(activity)} />
                 ))}
               </div>
             </section>
@@ -417,12 +400,12 @@ export default function App() {
                   <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.services}</h2>
                 </div>
                 {isAdmin && (
-                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nuevo Servicio', description: '...', image: '', type: 'service', timestamp: serverTimestamp() }); })} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
+                  <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nuevo Servicio', description: '...', image: '', price: '0.00', type: 'service', timestamp: serverTimestamp() }); })} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
                 )}
               </div>
               <div className="grid gap-8">
                 {activities.filter(a => a.type === 'service').map(service => (
-                  <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(service)} onGenerateIA={handleGenerateIA} isGenerating={isGeneratingIA === service.id} />
+                  <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(service)} />
                 ))}
               </div>
             </section>
@@ -507,7 +490,6 @@ export default function App() {
                       
                       {isAdmin && (
                         <div className="mb-6 space-y-4">
-                          {/* Configuración de Contacto y Banco */}
                           <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100 space-y-4">
                             <div>
                               <label className="text-[8px] font-black uppercase tracking-widest text-blue-400 block mb-1">WhatsApp (Ej: +593987654321)</label>
@@ -532,7 +514,6 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Gestión de Items (Menú/Habitaciones) */}
                           <div className="p-6 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
                             <div className="flex justify-between items-center mb-4">
                               <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{ally.type === 'hospedaje' ? t.locales.rooms : t.locales.menu}</h4>
@@ -548,8 +529,8 @@ export default function App() {
                             </div>
                             <div className="space-y-6">
                               {(ally.items || []).map((item, idx) => (
-                                <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-                                  <div className="flex items-start gap-4 mb-4">
+                                <div key={item.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 relative group/item">
+                                  <div className="flex items-center gap-4">
                                     <div className="flex-1 space-y-2">
                                       <input 
                                         value={item.name} 
@@ -558,11 +539,11 @@ export default function App() {
                                           newItems[idx].name = e.target.value;
                                           updateAllyItems(ally.id, newItems);
                                         }}
-                                        className="w-full text-sm font-bold outline-none border-b border-transparent focus:border-[#118AB2]"
-                                        placeholder="Nombre"
+                                        className="w-full text-sm font-black outline-none border-b border-transparent focus:border-[#118AB2]"
+                                        placeholder="Nombre del plato o habitación"
                                       />
                                       <div className="flex items-center gap-2">
-                                        <DollarSign size={14} className="text-slate-300"/>
+                                        <DollarSign size={14} className="text-[#118AB2]"/>
                                         <input 
                                           value={item.price} 
                                           onChange={(e) => {
@@ -570,7 +551,7 @@ export default function App() {
                                             newItems[idx].price = e.target.value;
                                             updateAllyItems(ally.id, newItems);
                                           }}
-                                          className="w-24 text-sm font-black text-[#118AB2] outline-none border-b border-transparent focus:border-[#118AB2]"
+                                          className="w-24 text-sm font-black text-slate-900 outline-none border-b border-transparent focus:border-[#118AB2]"
                                           placeholder="0.00"
                                         />
                                       </div>
@@ -580,43 +561,22 @@ export default function App() {
                                         const newItems = (ally.items || []).filter(i => i.id !== item.id);
                                         updateAllyItems(ally.id, newItems);
                                       }}
-                                      className="text-rose-200 hover:text-rose-500 transition-all p-2"
+                                      className="text-rose-200 hover:text-rose-500 transition-all p-2 bg-rose-50 rounded-xl"
                                     >
-                                      <Trash2 size={20}/>
+                                      <Trash2 size={18}/>
                                     </button>
                                   </div>
-                                  
-                                  {/* Item Gallery Management - Critical for Hotels */}
-                                  {ally.type === 'hospedaje' && (
-                                    <GalleryEditor 
-                                      images={item.images || []} 
-                                      t={t}
-                                      onUpdate={(newImgs) => {
-                                        const newItems = [...(ally.items || [])];
-                                        newItems[idx].images = newImgs;
-                                        // Also set first as main 'image' for backward compatibility
-                                        if (newImgs.length > 0) newItems[idx].image = newImgs[0];
-                                        updateAllyItems(ally.id, newItems);
-                                      }} 
-                                    />
-                                  )}
-                                  
-                                  {/* Simple image editor for non-hotels or as fallback */}
-                                  {ally.type !== 'hospedaje' && (
-                                    <div className="mt-2">
-                                      <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 block mb-1">URL Foto Principal</label>
-                                      <input 
-                                        value={item.image}
-                                        onChange={(e) => {
-                                          const newItems = [...(ally.items || [])];
-                                          newItems[idx].image = e.target.value;
-                                          updateAllyItems(ally.id, newItems);
-                                        }}
-                                        className="w-full text-[10px] p-2 rounded-lg bg-slate-50 border border-slate-100 outline-none focus:border-blue-300"
-                                        placeholder="https://..."
-                                      />
-                                    </div>
-                                  )}
+
+                                  {/* Editor de Galería para cada Item */}
+                                  <GalleryEditor 
+                                    images={item.images || []} 
+                                    t={t}
+                                    onUpdate={(newImgs) => {
+                                      const newItems = [...(ally.items || [])];
+                                      newItems[idx].images = newImgs;
+                                      updateAllyItems(ally.id, newItems);
+                                    }}
+                                  />
                                 </div>
                               ))}
                             </div>

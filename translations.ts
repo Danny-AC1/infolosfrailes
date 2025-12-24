@@ -2,7 +2,7 @@
 export const translations = {
   es: {
     nav: {
-      info: 'Info',
+      info: 'Guía',
       explora: 'Explora',
       travel: 'Turismo',
       aliados: 'Locales',
@@ -34,11 +34,11 @@ export const translations = {
       activities: 'Actividades',
       services: 'Servicios',
       comingSoon: 'Próximamente más servicios locales',
-      tapToSee: 'Toca para ver detalles con IA'
+      tapToSee: 'Toca para ver detalles'
     },
     activityDetails: {
-      loading: 'Generando guía con IA...',
-      error: 'No se pudo conectar con la IA. Intenta más tarde.',
+      loading: 'Cargando detalles...',
+      error: 'Error al cargar. Intenta más tarde.',
       whatToBring: '¿Qué llevar?',
       bestTime: 'Mejor momento',
       safety: 'Seguridad y Ambiente',
@@ -107,7 +107,7 @@ export const translations = {
   },
   en: {
     nav: {
-      info: 'Info',
+      info: 'Guide',
       explora: 'Explore',
       travel: 'Travel',
       aliados: 'Local Spots',
@@ -139,11 +139,11 @@ export const translations = {
       activities: 'Activities',
       services: 'Services',
       comingSoon: 'More local services coming soon',
-      tapToSee: 'Tap to see AI details'
+      tapToSee: 'Tap to see details'
     },
     activityDetails: {
-      loading: 'Generating AI guide...',
-      error: 'Could not connect to AI. Try again later.',
+      loading: 'Loading details...',
+      error: 'Could not load details. Try again later.',
       whatToBring: 'What to bring?',
       bestTime: 'Best time',
       safety: 'Safety & Environment',

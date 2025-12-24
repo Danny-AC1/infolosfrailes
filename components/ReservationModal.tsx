@@ -107,7 +107,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
     
     setIsSaving(true);
     try {
-      // Guardar en Firestore para el administrador
       await addDoc(collection(db, 'reservations'), {
         allyId: ally.id,
         allyName: ally.name,
@@ -120,7 +119,6 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
         timestamp: serverTimestamp()
       });
 
-      // Preparar WhatsApp
       const selectedList = selectedObjects
         .map(i => `- ${i.name} ($${i.price})`)
         .join('\n');
@@ -151,18 +149,40 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
   return (
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-6 animate-in fade-in duration-300">
       
-      {/* Lightbox for gallery images */}
+      {/* Lightbox para galería deslizable */}
       {activeGallery && (
-        <div className="fixed inset-0 z-[1100] bg-black/95 flex flex-col items-center justify-center p-6" onClick={() => setActiveGallery(null)}>
-          <button className="absolute top-8 right-8 text-white p-2 bg-white/10 rounded-full hover:bg-white/20">
-            <X size={32}/>
+        <div className="fixed inset-0 z-[1100] bg-black/95 flex flex-col items-center justify-center p-4" onClick={() => setActiveGallery(null)}>
+          <button className="absolute top-6 right-6 text-white p-3 bg-white/10 rounded-full hover:bg-white/20 z-[1110] transition-all active:scale-90 shadow-2xl">
+            <X size={24}/>
           </button>
-          <div className="w-full max-w-4xl flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory py-10" onClick={e => e.stopPropagation()}>
-            {activeGallery.map((img, i) => (
-              <img key={i} src={img} className="h-[60vh] object-contain snap-center rounded-3xl shadow-2xl" alt="Gallery detail"/>
-            ))}
+          
+          <div className="w-full max-w-4xl h-full flex flex-col justify-center items-center">
+            <div 
+              className="w-full h-full flex gap-4 overflow-x-auto no-scrollbar snap-x snap-mandatory items-center py-20 px-4" 
+              onClick={e => e.stopPropagation()}
+            >
+              {activeGallery.map((img, i) => (
+                <div key={i} className="min-w-full h-full flex-shrink-0 snap-center flex items-center justify-center">
+                  <img 
+                    src={img} 
+                    className="max-h-full max-w-full object-contain rounded-[2rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-white/5" 
+                    alt="Gallery item"
+                  />
+                </div>
+              ))}
+            </div>
+            
+            <div className="absolute bottom-10 left-0 right-0 flex flex-col items-center gap-4 animate-bounce">
+              <div className="flex gap-2">
+                {activeGallery.map((_, i) => (
+                  <div key={i} className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                ))}
+              </div>
+              <p className="text-white/40 text-[9px] font-black uppercase tracking-[0.3em] backdrop-blur-md px-4 py-2 rounded-full border border-white/5">
+                Desliza para explorar
+              </p>
+            </div>
           </div>
-          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mt-4">Toca fuera para cerrar</p>
         </div>
       )}
 
@@ -198,32 +218,39 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                     key={item.id} 
                     className={`group/item p-4 rounded-3xl border-2 transition-all flex items-center gap-4 relative overflow-hidden ${selectedItems[item.id] ? 'border-[#118AB2] bg-blue-50/50 shadow-md' : 'border-slate-100 bg-white hover:border-slate-200'}`}
                   >
-                    <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0 relative">
+                    <div className="w-20 h-20 rounded-2xl bg-slate-100 overflow-hidden flex-shrink-0 relative group/thumb">
                       {item.image ? (
                         <img src={item.image} className="w-full h-full object-cover" alt={item.name}/>
+                      ) : (item.images && item.images.length > 0) ? (
+                        <img src={item.images[0]} className="w-full h-full object-cover" alt={item.name}/>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-300 bg-slate-50">
                           {isHotel ? <Bed size={24}/> : <Utensils size={24}/>}
                         </div>
                       )}
                       
-                      {/* Gallery trigger button if it's a hotel room */}
-                      {isHotel && item.images && item.images.length > 0 && (
+                      {item.images && item.images.length > 0 && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); setActiveGallery(item.images || null); }}
-                          className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
+                          className="absolute inset-0 bg-[#118AB2]/60 flex items-center justify-center text-white opacity-0 group-hover/item:opacity-100 transition-opacity"
                         >
-                          <ImageIcon size={20}/>
+                          <ImageIcon size={20} className="drop-shadow-lg" />
                         </button>
                       )}
                     </div>
                     
                     <div className="flex-1 cursor-pointer" onClick={() => toggleItem(item.id)}>
                       <h5 className="text-sm font-black text-slate-900 leading-tight mb-1">{item.name}</h5>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <span className="text-[11px] font-black text-[#118AB2] tracking-tighter">$ {item.price}</span>
-                        {isHotel && item.images && item.images.length > 0 && (
-                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.images.length} Fotos</span>
+                        {item.images && item.images.length > 0 && (
+                          <div 
+                            className="flex items-center gap-1.5 cursor-pointer hover:bg-[#118AB2]/10 p-1 rounded-md transition-all"
+                            onClick={(e) => { e.stopPropagation(); setActiveGallery(item.images || null); }}
+                          >
+                            <ImageIcon size={10} className="text-[#118AB2]" />
+                            <span className="text-[8px] font-black text-[#118AB2] uppercase tracking-widest">{item.images.length} Fotos</span>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -299,7 +326,7 @@ export default function ReservationModal({ ally, onClose, language = 'es' }: Res
                 <p className="text-xs text-amber-700 font-medium leading-relaxed">{mt.labels.transferDesc}</p>
                 <div className="mt-6 p-6 bg-white/80 rounded-3xl text-left border border-amber-100 shadow-sm">
                   <p className="text-[8px] font-black uppercase tracking-widest text-amber-600 mb-3">{mt.labels.bankInfo}</p>
-                  <pre className="text-xs font-bold text-slate-800 whitespace-pre-wrap font-['Montserrat'] leading-relaxed">
+                  <pre className="text-xs font-bold text-slate-800 whitespace-pre-wrap font-['Montserrat'] leading-relaxed text-justify">
                     {ally.bankDetails || '...'}
                   </pre>
                 </div>
