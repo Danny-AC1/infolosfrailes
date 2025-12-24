@@ -22,13 +22,15 @@ export const translations = {
     tabs: {
       normativas: 'Normativas',
       parqueadero: 'Parqueadero',
-      seguridad: 'Seguridad'
+      seguridad: 'Seguridad',
+      mapa: 'Mapa'
     },
     info: {
       allowed: 'Sí se permite',
       notAllowed: 'No se permite',
       parking: 'Info Vehicular',
-      safety: 'Zona Segura'
+      safety: 'Zona Segura',
+      mapTitle: 'Mapa Interactivo'
     },
     explora: {
       activities: 'Actividades',
@@ -127,13 +129,15 @@ export const translations = {
     tabs: {
       normativas: 'Rules',
       parqueadero: 'Parking',
-      seguridad: 'Safety'
+      seguridad: 'Safety',
+      mapa: 'Map'
     },
     info: {
       allowed: 'Allowed',
       notAllowed: 'Not Allowed',
       parking: 'Vehicle Info',
-      safety: 'Safety Zone'
+      safety: 'Safety Zone',
+      mapTitle: 'Interactive Map'
     },
     explora: {
       activities: 'Activities',

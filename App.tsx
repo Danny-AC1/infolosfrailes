@@ -369,6 +369,23 @@ export default function App() {
                 )},
                 { id: 'seguridad', label: t.tabs.seguridad, content: (
                   <ListEditor items={content.seguridadItems} field="seguridadItems" title={t.info.safety} icon={ShieldCheck} colorClass="bg-white border-slate-200 text-blue-700" isAdmin={isAdmin} content={content} />
+                )},
+                { id: 'mapa', label: t.tabs.mapa, content: (
+                  <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl border border-slate-100 p-2">
+                    <div className="flex items-center gap-3 mb-4 p-4">
+                      <div className="p-2 bg-blue-50 rounded-xl text-[#118AB2]"><MapIcon size={20}/></div>
+                      <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.info.mapTitle}</h3>
+                    </div>
+                    <div className="relative w-full aspect-[4/3] sm:aspect-video rounded-[2rem] overflow-hidden bg-slate-100">
+                      <iframe 
+                        src="https://www.google.com/maps/d/u/0/embed?mid=1fjLHcWYGpdpQ6JDiFn5gXX5bIPssKV4&ehbc=2E312F&noprof=1" 
+                        width="100%" 
+                        height="100%" 
+                        style={{ border: 0 }}
+                        className="absolute inset-0"
+                      ></iframe>
+                    </div>
+                  </div>
                 )}
             ]} />
           </div>
