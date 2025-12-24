@@ -62,7 +62,10 @@ const formatFormattedText = (text: string) => {
 
 export default function ActivityDetailsModal({ activity, onClose, language, t, isAdmin, onUpdate }: ActivityDetailsModalProps) {
   // Se considera que hay datos si cualquiera de los campos principales tiene contenido
-  const hasData = !!(
+  // O si el admin lo está editando (para permitirle agregar datos nuevos)
+  const extendedInfo = activity.extendedDescription || activity.description || '';
+  
+  const hasAdvancedData = !!(
     (activity.extendedDescription && activity.extendedDescription.trim() !== '') || 
     (activity.whatToBring && activity.whatToBring.length > 0) || 
     activity.bestTime || 
@@ -103,117 +106,108 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
           </div>
 
           <div className="p-8 pt-2 space-y-8">
-            {/* Si no hay datos y no es admin, mostramos mensaje de vacío */}
-            {!hasData && !isAdmin ? (
-               <div className="py-20 flex flex-col items-center justify-center text-center px-10">
-                 <AlertCircle className="text-slate-200 mb-4" size={48} />
-                 <p className="text-slate-400 font-bold text-sm leading-relaxed italic">Esta sección aún no tiene detalles registrados por el equipo.</p>
-               </div>
-            ) : (
-              <>
-                <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-blue-50 rounded-xl text-[#118AB2]"><Info size={18}/></div>
-                      <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.description}</h4>
-                    </div>
-                    {isAdmin && (
-                      <span className="text-[7px] font-black text-[#118AB2] uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md">
-                        Formato: **Negrita** y guión (-) para listas
-                      </span>
-                    )}
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-50 rounded-xl text-[#118AB2]"><Info size={18}/></div>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.description}</h4>
+                </div>
+                {isAdmin && (
+                  <span className="text-[7px] font-black text-[#118AB2] uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md">
+                    Formato: **Negrita** y guión (-) para listas
+                  </span>
+                )}
+              </div>
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group">
+                {isAdmin ? (
+                   <EditableText 
+                    isAdmin={true} 
+                    text={activity.extendedDescription || activity.description || ''} 
+                    multiline
+                    onSave={(val) => onUpdate?.({ extendedDescription: val })}
+                    className="leading-relaxed text-justify"
+                   />
+                ) : (
+                  <div className="leading-relaxed text-justify">
+                    {formatFormattedText(extendedInfo)}
                   </div>
-                  <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 relative group">
-                    {isAdmin ? (
+                )}
+              </div>
+            </section>
+
+            <div className="grid sm:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+              <section>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-amber-50 rounded-xl text-amber-600"><Briefcase size={18}/></div>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.whatToBring}</h4>
+                </div>
+                <ul className="space-y-2">
+                  {isAdmin ? (
+                    <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                        <EditableText 
                         isAdmin={true} 
-                        text={activity.extendedDescription || ''} 
+                        text={activity.whatToBring?.join('\n') || ''} 
                         multiline
-                        onSave={(val) => onUpdate?.({ extendedDescription: val })}
-                        className="leading-relaxed text-justify"
+                        onSave={(val) => onUpdate?.({ whatToBring: val.split('\n').filter(Boolean) })}
+                        className="text-xs font-bold text-slate-700"
                        />
-                    ) : (
-                      <div className="leading-relaxed">
-                        {formatFormattedText(activity.extendedDescription || 'Información agregada por el equipo de Los Frailes.')}
-                      </div>
-                    )}
-                  </div>
-                </section>
+                       <p className="text-[7px] text-slate-300 mt-2 uppercase font-black text-center tracking-widest">Un ítem por línea</p>
+                    </div>
+                  ) : (
+                    activity.whatToBring?.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm text-justify">
+                        <Check size={12} className="text-amber-500 flex-shrink-0" /> {item}
+                      </li>
+                    )) || <li className="text-[10px] text-slate-300 italic">Sin datos específicos</li>
+                  )}
+                </ul>
+              </section>
 
-                <div className="grid sm:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
-                  <section>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-amber-50 rounded-xl text-amber-600"><Briefcase size={18}/></div>
-                      <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.whatToBring}</h4>
-                    </div>
-                    <ul className="space-y-2">
-                      {isAdmin ? (
-                        <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                           <EditableText 
-                            isAdmin={true} 
-                            text={activity.whatToBring?.join('\n') || ''} 
-                            multiline
-                            onSave={(val) => onUpdate?.({ whatToBring: val.split('\n').filter(Boolean) })}
-                            className="text-xs font-bold text-slate-700"
-                           />
-                           <p className="text-[7px] text-slate-300 mt-2 uppercase font-black text-center tracking-widest">Un ítem por línea</p>
-                        </div>
-                      ) : (
-                        activity.whatToBring?.map((item, i) => (
-                          <li key={i} className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-white p-3 rounded-xl border border-slate-100 shadow-sm text-justify">
-                            <Check size={12} className="text-amber-500 flex-shrink-0" /> {item}
-                          </li>
-                        )) || <li className="text-[10px] text-slate-300 italic">Sin datos específicos</li>
-                      )}
-                    </ul>
-                  </section>
-
-                  <section>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600"><Sun size={18}/></div>
-                      <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.bestTime}</h4>
-                    </div>
-                    <div className="bg-emerald-50/50 p-5 rounded-[2rem] border border-emerald-100 text-emerald-800 text-[11px] font-bold leading-relaxed text-justify">
-                      <EditableText 
-                        isAdmin={!!isAdmin} 
-                        text={activity.bestTime || 'Cualquier momento es ideal en este paraíso.'} 
-                        onSave={(val) => onUpdate?.({ bestTime: val })}
-                      />
-                    </div>
-                  </section>
+              <section>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600"><Sun size={18}/></div>
+                  <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.bestTime}</h4>
                 </div>
+                <div className="bg-emerald-50/50 p-5 rounded-[2rem] border border-emerald-100 text-emerald-800 text-[11px] font-bold leading-relaxed text-justify">
+                  <EditableText 
+                    isAdmin={!!isAdmin} 
+                    text={activity.bestTime || 'Cualquier momento es ideal en este paraíso.'} 
+                    onSave={(val) => onUpdate?.({ bestTime: val })}
+                    className="text-justify"
+                  />
+                </div>
+              </section>
+            </div>
 
-                <section className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-rose-50 rounded-xl text-rose-600"><ShieldAlert size={18}/></div>
-                    <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.safety}</h4>
-                  </div>
-                  <div className="grid gap-3">
-                    {isAdmin ? (
-                       <div className="bg-rose-50/30 p-4 rounded-2xl border border-rose-100/50">
-                         <EditableText 
-                          isAdmin={true} 
-                          text={activity.safetyTips?.join('\n') || ''} 
-                          multiline
-                          onSave={(val) => onUpdate?.({ safetyTips: val.split('\n').filter(Boolean) })}
-                          className="text-[11px] font-semibold text-rose-900 text-justify"
-                         />
-                         <p className="text-[7px] text-rose-300 mt-2 uppercase font-black text-center tracking-widest">Un consejo por línea</p>
-                       </div>
-                    ) : (
-                      activity.safetyTips?.map((tip, i) => (
-                        <div key={i} className="flex items-start gap-4 bg-rose-50/30 p-4 rounded-2xl border border-rose-100/50">
-                          <div className="w-2 h-2 rounded-full bg-rose-400 mt-1.5 flex-shrink-0" />
-                          <div className="text-[11px] font-semibold text-rose-900 leading-tight text-justify">
-                            {formatFormattedText(tip)}
-                          </div>
-                        </div>
-                      )) || <div className="text-[10px] text-slate-300 italic">Siga las normas generales del parque.</div>
-                    )}
-                  </div>
-                </section>
-              </>
-            )}
+            <section className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-rose-50 rounded-xl text-rose-600"><ShieldAlert size={18}/></div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.safety}</h4>
+              </div>
+              <div className="grid gap-3">
+                {isAdmin ? (
+                   <div className="bg-rose-50/30 p-4 rounded-2xl border border-rose-100/50">
+                     <EditableText 
+                      isAdmin={true} 
+                      text={activity.safetyTips?.join('\n') || ''} 
+                      multiline
+                      onSave={(val) => onUpdate?.({ safetyTips: val.split('\n').filter(Boolean) })}
+                      className="text-[11px] font-semibold text-rose-900 text-justify"
+                     />
+                     <p className="text-[7px] text-rose-300 mt-2 uppercase font-black text-center tracking-widest">Un consejo por línea</p>
+                   </div>
+                ) : (
+                  activity.safetyTips?.map((tip, i) => (
+                    <div key={i} className="flex items-start gap-4 bg-rose-50/30 p-4 rounded-2xl border border-rose-100/50">
+                      <div className="w-2 h-2 rounded-full bg-rose-400 mt-1.5 flex-shrink-0" />
+                      <div className="text-[11px] font-semibold text-rose-900 leading-tight text-justify">
+                        {formatFormattedText(tip)}
+                      </div>
+                    </div>
+                  )) || <div className="text-[10px] text-slate-300 italic">Siga las normas generales del parque.</div>
+                )}
+              </div>
+            </section>
             <div className="h-10" />
           </div>
         </div>

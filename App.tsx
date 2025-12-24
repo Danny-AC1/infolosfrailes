@@ -58,7 +58,7 @@ interface ActivityCardProps {
 
 function ActivityCard({ activity, isAdmin, t, onClick }: ActivityCardProps) {
   return (
-    <div onClick={onClick} className={`bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card ${!isAdmin ? 'cursor-pointer' : ''}`}>
+    <div onClick={onClick} className="bg-white rounded-[2.5rem] overflow-hidden shadow-xl flex flex-col sm:flex-row border border-slate-50 hover:shadow-2xl transition-all group/card cursor-pointer">
       <div className="w-full sm:w-56 h-56 relative bg-slate-100 flex-shrink-0">
         <EditableImage isAdmin={isAdmin} src={activity.image} onSave={(url) => updateDoc(doc(db, 'activities', activity.id), { image: url })} className="w-full h-full" />
         
@@ -97,11 +97,9 @@ function ActivityCard({ activity, isAdmin, t, onClick }: ActivityCardProps) {
 
         <EditableText isAdmin={isAdmin} text={activity.description} onSave={(val) => updateDoc(doc(db, 'activities', activity.id), { description: val })} className="text-slate-500 text-sm font-medium leading-relaxed" multiline />
         
-        {!isAdmin && (
-          <div className="mt-4 flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-[#118AB2] opacity-0 group-hover/card:opacity-100 transition-opacity">
-            <Sparkles size={10} /> {t.explora.tapToSee}
-          </div>
-        )}
+        <div className="mt-4 flex items-center gap-2 text-[8px] font-black uppercase tracking-widest text-[#118AB2] opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <Sparkles size={10} /> {isAdmin ? "Toca para editar detalles avanzados" : t.explora.tapToSee}
+        </div>
       </div>
     </div>
   );
@@ -388,7 +386,7 @@ export default function App() {
               </div>
               <div className="grid gap-8">
                 {activities.filter(a => a.type === 'activity').map(activity => (
-                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(activity)} />
+                  <ActivityCard key={activity.id} activity={activity} isAdmin={isAdmin} t={t} onClick={() => setSelectedActivity(activity)} />
                 ))}
               </div>
             </section>
@@ -405,7 +403,7 @@ export default function App() {
               </div>
               <div className="grid gap-8">
                 {activities.filter(a => a.type === 'service').map(service => (
-                  <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} onClick={() => !isAdmin && setSelectedActivity(service)} />
+                  <ActivityCard key={service.id} activity={service} isAdmin={isAdmin} t={t} onClick={() => setSelectedActivity(service)} />
                 ))}
               </div>
             </section>
