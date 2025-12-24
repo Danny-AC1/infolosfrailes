@@ -61,25 +61,31 @@ const formatFormattedText = (text: string) => {
 /**
  * Componente interno para gestionar listas de strings (Qué llevar, Seguridad)
  */
-function ListManager({ items, onUpdate, title, icon: Icon, colorClass, isAdmin, t }: any) {
+function ListManager({ items, onUpdate, title, titleField, icon: Icon, colorClass, isAdmin, t }: any) {
   const [newItem, setNewItem] = useState('');
 
   const addItem = () => {
     if (newItem.trim()) {
-      onUpdate([...(items || []), newItem.trim()]);
+      onUpdate?.({ [items.field]: [...(items.value || []), newItem.trim()] });
       setNewItem('');
     }
   };
 
   const removeItem = (index: number) => {
-    onUpdate((items || []).filter((_: any, i: number) => i !== index));
+    onUpdate?.({ [items.field]: (items.value || []).filter((_: any, i: number) => i !== index) });
   };
 
   return (
     <section className="animate-in fade-in duration-500">
       <div className="flex items-center gap-3 mb-4">
         <div className={`p-2 rounded-xl ${colorClass}`}>{Icon}</div>
-        <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{title}</h4>
+        <div className="text-[11px] font-black uppercase tracking-widest text-slate-900">
+          <EditableText 
+            isAdmin={isAdmin} 
+            text={title} 
+            onSave={(val) => onUpdate?.({ [titleField]: val })} 
+          />
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -102,10 +108,10 @@ function ListManager({ items, onUpdate, title, icon: Icon, colorClass, isAdmin, 
         )}
 
         <div className="grid gap-2">
-          {(!items || items.length === 0) && !isAdmin ? (
-            <p className="text-[10px] text-slate-300 italic italic">Sin información específica aún.</p>
+          {(!items.value || items.value.length === 0) && !isAdmin ? (
+            <p className="text-[10px] text-slate-300 italic">Sin información específica aún.</p>
           ) : (
-            (items || []).map((item: string, i: number) => (
+            (items.value || []).map((item: string, i: number) => (
               <div key={i} className="flex items-center gap-3 bg-white p-3 rounded-2xl border border-slate-50 shadow-sm group">
                 <Check size={12} className="text-[#118AB2] flex-shrink-0" />
                 <span className="flex-1 text-xs font-bold text-slate-700 text-justify leading-tight">{item}</span>
@@ -165,7 +171,13 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-50 rounded-xl text-[#118AB2]"><Info size={18}/></div>
-                  <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.description}</h4>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-900">
+                    <EditableText 
+                      isAdmin={isAdmin} 
+                      text={activity.descriptionLabel || t.activityDetails.description} 
+                      onSave={(val) => onUpdate?.({ descriptionLabel: val })} 
+                    />
+                  </div>
                 </div>
                 {isAdmin && (
                   <span className="text-[7px] font-black text-[#118AB2] uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md">
@@ -193,9 +205,10 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
             <div className="grid sm:grid-cols-2 gap-8">
               {/* QUÉ LLEVAR */}
               <ListManager 
-                items={activity.whatToBring} 
-                onUpdate={(newItems: string[]) => onUpdate?.({ whatToBring: newItems })}
-                title={t.activityDetails.whatToBring}
+                items={{ field: 'whatToBring', value: activity.whatToBring }} 
+                onUpdate={onUpdate}
+                title={activity.whatToBringLabel || t.activityDetails.whatToBring}
+                titleField="whatToBringLabel"
                 icon={<Briefcase size={18}/>}
                 colorClass="bg-amber-50 text-amber-600"
                 isAdmin={isAdmin}
@@ -206,7 +219,13 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
               <section className="animate-in fade-in duration-500">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2 bg-emerald-50 rounded-xl text-emerald-600"><Sun size={18}/></div>
-                  <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900">{t.activityDetails.bestTime}</h4>
+                  <div className="text-[11px] font-black uppercase tracking-widest text-slate-900">
+                    <EditableText 
+                      isAdmin={isAdmin} 
+                      text={activity.bestTimeLabel || t.activityDetails.bestTime} 
+                      onSave={(val) => onUpdate?.({ bestTimeLabel: val })} 
+                    />
+                  </div>
                 </div>
                 <div className="bg-emerald-50/50 p-6 rounded-[2rem] border border-emerald-100">
                   <EditableText 
@@ -221,9 +240,10 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
 
             {/* SEGURIDAD Y AMBIENTE */}
             <ListManager 
-              items={activity.safetyTips} 
-              onUpdate={(newItems: string[]) => onUpdate?.({ safetyTips: newItems })}
-              title={t.activityDetails.safety}
+              items={{ field: 'safetyTips', value: activity.safetyTips }} 
+              onUpdate={onUpdate}
+              title={activity.safetyTipsLabel || t.activityDetails.safety}
+              titleField="safetyTipsLabel"
               icon={<ShieldAlert size={18}/>}
               colorClass="bg-rose-50 text-rose-600"
               isAdmin={isAdmin}

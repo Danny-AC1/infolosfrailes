@@ -34,6 +34,8 @@ const INITIAL_CONTENT: SiteContent = {
   seguridadItems: ['Atención a banderas', 'Siga los senderos'],
   aliadosVisible: true,
   tiendaVisible: true,
+  activitiesTitle: 'Actividades',
+  servicesTitle: 'Servicios',
   ecuadorTravelPromo: {
     title: 'Ecuador Travel',
     description: 'Nuestra red social dedicada a compartir la magia de Manabí.',
@@ -378,7 +380,13 @@ export default function App() {
               <div className="flex justify-between items-center mb-8 px-2">
                 <div className="flex items-center gap-3">
                   <Waves className="text-[#118AB2]" size={28} />
-                  <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.activities}</h2>
+                  <div className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">
+                    <EditableText 
+                      isAdmin={isAdmin} 
+                      text={content.activitiesTitle || t.explora.activities} 
+                      onSave={(val) => updateDoc(doc(db, 'content', 'main'), { activitiesTitle: val })}
+                    />
+                  </div>
                 </div>
                 {isAdmin && (
                   <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nueva Actividad', description: '...', image: '', price: '0.00', type: 'activity', timestamp: serverTimestamp() }); })} className="bg-[#118AB2] text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>
@@ -395,7 +403,13 @@ export default function App() {
               <div className="flex justify-between items-center mb-8 px-2">
                 <div className="flex items-center gap-3">
                   <Briefcase className="text-[#118AB2]" size={28} />
-                  <h2 className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">{t.explora.services}</h2>
+                  <div className="text-3xl font-black text-slate-900 leading-none uppercase tracking-tighter">
+                    <EditableText 
+                      isAdmin={isAdmin} 
+                      text={content.servicesTitle || t.explora.services} 
+                      onSave={(val) => updateDoc(doc(db, 'content', 'main'), { servicesTitle: val })}
+                    />
+                  </div>
                 </div>
                 {isAdmin && (
                   <button onClick={() => handleAdminAction(async () => { await addDoc(collection(db, 'activities'), { title: 'Nuevo Servicio', description: '...', image: '', price: '0.00', type: 'service', timestamp: serverTimestamp() }); })} className="bg-emerald-500 text-white p-3 rounded-2xl shadow-xl active:scale-90 transition-all"><Plus size={20}/></button>

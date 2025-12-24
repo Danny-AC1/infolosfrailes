@@ -10,6 +10,9 @@ export interface SiteContent {
   seguridadItems: string[];
   aliadosVisible: boolean;
   tiendaVisible: boolean;
+  // Custom section titles
+  activitiesTitle?: string;
+  servicesTitle?: string;
   ecuadorTravelPromo: {
     title: string;
     description: string;
@@ -38,6 +41,11 @@ export interface Activity {
   whatToBring?: string[];
   bestTime?: string;
   safetyTips?: string[];
+  // Custom modal labels
+  descriptionLabel?: string;
+  whatToBringLabel?: string;
+  bestTimeLabel?: string;
+  safetyTipsLabel?: string;
 }
 
 export interface AllyItem {
