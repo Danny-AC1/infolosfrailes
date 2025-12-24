@@ -161,7 +161,13 @@ export default function ActivityDetailsModal({ activity, onClose, language, t, i
                   </span>
                 )}
               </div>
-              <h3 className="text-3xl font-black text-slate-900 leading-none tracking-tighter uppercase">{activity.title}</h3>
+              <div className="text-3xl font-black text-slate-900 leading-none tracking-tighter uppercase">
+                <EditableText 
+                  isAdmin={isAdmin} 
+                  text={activity.title} 
+                  onSave={(val) => onUpdate?.({ title: val })}
+                />
+              </div>
             </div>
           </div>
 
